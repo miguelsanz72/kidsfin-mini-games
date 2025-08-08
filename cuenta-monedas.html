@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KidsFin • Cuenta Monedas</title>
+  <style>
+    /*
+      KidsFin - Minijuego: Cuenta Monedas (MVP)
+      Mecánica: arrastrar/soltar (o tocar) monedas/billetes a una alcancía hasta llegar al objetivo.
+      Público: 4–8 años.
+
+      ✨ Telemetría guardada en localStorage:
+        - Keys: "KidsFin:telemetry:last", "KidsFin:telemetry:history",
+                 "KidsFin:walletCoins", "KidsFin:walletXp"
+        - Evento: window 'kidsfin-mini-telemetry' con detail del objeto de sesión.
+
+      ⚙️ Config rápido: busca la constante CONFIG en <script>.
+    */
+
+    :root {
+      --bg: #f6f8ff;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --brand: #7c3aed; /* morado amable */
+      --ok: #16a34a;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --coin-10: #fcd34d;
+      --coin-50: #fbbf24;
+      --coin-100: #f59e0b;
+      --bill-1000: #a7f3d0;
+      --shadow: 0 8px 20px rgba(0,0,0,.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--ink);
+      background: radial-gradient(1200px 600px at 30% -10%, #eef2ff 0%, var(--bg) 60%);
+      touch-action: none; /* mejor DnD en mobile */
+    }
+
+    .app { max-width: 980px; margin: 0 auto; padding: 16px; }
+
+    header {
+      display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+      margin: 8px 0 12px;
+    }
+    .title {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .pig {
+      width: 40px; aspect-ratio: 1; border-radius: 40% 40% 50% 50% / 50% 50% 40% 40%;
+      background: linear-gradient(145deg, #fecaca, #f472b6);
+      position: relative; box-shadow: var(--shadow);
+    }
+    .pig::before { /* oreja */
+      content: ""; position: absolute; width: 14px; height: 14px; background: #fb7185; border-radius: 4px;
+      top: -6px; left: 8px; transform: rotate(-20deg);
+    }
+    .pig::after { /* ojo */
+      content: ""; position: absolute; width: 6px; height: 6px; background: #111827; border-radius: 50%;
+      top: 12px; left: 24px;
+    }
+    h1 { font-size: clamp(20px, 4vw, 28px); margin: 0; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+
+    .hud {
+      display: grid; grid-template-columns: repeat(2, 1fr) repeat(3, auto); gap: 10px; align-items: center;
+      background: var(--panel); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow);
+      font-size: clamp(14px, 2.2vw, 16px);
+    }
+    .badge { background: #eef2ff; color: #3730a3; padding: 6px 10px; border-radius: 999px; font-weight: 700; }
+    .target, .current, .timer { font-weight: 700; }
+    .stars { display: inline-flex; gap: 4px; }
+    .star { width: 18px; height: 18px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); opacity: .35; }
+    .star.on { opacity: 1; }
+
+    .progress {
+      display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin: 10px 0 14px;
+    }
+    .dot { height: 8px; border-radius: 999px; background: #dbeafe; }
+    .dot.active { background: #60a5fa; }
+    .dot.done { background: #10b981; }
+
+    .board {
+      display: grid; grid-template-columns: 1fr; gap: 14px;
+    }
+
+    .bank-area, .tray {
+      background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 14px; min-height: 160px;
+    }
+
+    .bank-area {
+      display: grid; grid-template-columns: 1fr 220px; gap: 10px; align-items: center;
+      border: 3px dashed #fbcfe8;
+    }
+    .dropzone {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 140px; border-radius: 16px; background: repeating-linear-gradient(45deg, #fff5f7, #fff5f7 12px, #ffe4e6 12px, #ffe4e6 24px);
+      position: relative; overflow: hidden;
+    }
+    .dropzone .empty-hint { position: absolute; color: #9f1239; font-weight: 700; opacity: .8; }
+    .deposits { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px; }
+
+    .side-panel { display: grid; gap: 8px; }
+    .panel-card { background: #f8fafc; border-radius: 12px; padding: 10px; }
+    .panel-title { font-weight: 800; font-size: 14px; margin-bottom: 6px; color: #334155; }
+    .panel-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; font-size: 14px; }
+
+    .tray { display: grid; gap: 10px; }
+    .coins { display: grid; grid-template-columns: repeat(4, minmax(64px, 1fr)); gap: 10px; align-items: end; }
+
+    .denom { user-select: none; cursor: grab; display: grid; place-items: center; font-weight: 900;
+      border-radius: 999px; aspect-ratio: 1; box-shadow: var(--shadow); font-size: clamp(16px, 3vw, 20px);
+      transform: translateZ(0); transition: transform .1s ease;
+    }
+    .denom:active { transform: scale(.98); }
+
+    .coin-10 { background: radial-gradient(circle at 35% 35%, #fff3bf, var(--coin-10)); border: 3px solid #f59e0b; }
+    .coin-50 { background: radial-gradient(circle at 35% 35%, #fde68a, var(--coin-50)); border: 3px solid #d97706; }
+    .coin-100 { background: radial-gradient(circle at 35% 35%, #fcd34d, var(--coin-100)); border: 3px solid #b45309; }
+
+    .bill { border-radius: 10px; aspect-ratio: 9 / 5; display: grid; place-items: center; font-weight: 900;
+      background: linear-gradient(145deg, #d1fae5, var(--bill-1000)); border: 3px solid #0d9488;
+    }
+
+    .dragging { position: fixed; pointer-events: none; z-index: 50; transform: translate(-50%, -50%) scale(1.05); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-weight: 800;
+      color: #1f2937; background: #ffffff; border: 2px solid #fbcfe8; box-shadow: var(--shadow); cursor: pointer;
+    }
+
+    .controls { display: flex; gap: 8px; justify-content: center; padding-top: 6px; }
+    button {
+      appearance: none; border: 0; background: var(--brand); color: white; padding: 10px 14px; border-radius: 999px;
+      font-weight: 800; letter-spacing: .2px; box-shadow: var(--shadow); cursor: pointer; font-size: 15px;
+    }
+    button.secondary { background: #111827; }
+    button.ghost { background: #e5e7eb; color: #111827; }
+
+    .pulse { animation: pulse 1s infinite; }
+    @keyframes pulse { 0%{ transform: scale(1); } 50%{ transform: scale(1.06); } 100%{ transform: scale(1); } }
+
+    .toast { position: fixed; inset: auto 12px 12px 12px; display: grid; justify-items: center; pointer-events: none; }
+    .toast > div { background: #111827; color: white; padding: 8px 12px; border-radius: 10px; opacity: 0; transform: translateY(8px);
+      transition: all .25s ease; font-size: 14px; }
+    .toast.show > div { opacity: 1; transform: translateY(0); }
+
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.48); display: none; align-items: center; justify-content: center; padding: 16px; }
+    .overlay.show { display: flex; }
+    .card {
+      background: var(--panel); border-radius: 20px; padding: 18px; width: min(680px, 96vw); box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .big { font-size: 22px; font-weight: 900; margin: 0 0 6px; }
+    .summary { display: grid; gap: 10px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+    /* Responsive tweaks */
+    @media (max-width: 760px) {
+      .bank-area { grid-template-columns: 1fr; }
+      .coins { grid-template-columns: repeat(4, 1fr); }
+      .hud { grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(30px, auto); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="title">
+        <div class="pig" aria-hidden="true"></div>
+        <div>
+          <h1>Cuenta Monedas</h1>
+          <div class="subtitle">Arrastra monedas y billetes a la alcancía para llegar al <strong>monto objetivo</strong>. ¡Sin pasarte!</div>
+        </div>
+      </div>
+      <div><span class="badge">KidsFin • MVP</span></div>
+    </header>
+
+    <section class="hud" aria-live="polite">
+      <div><strong>Nivel:</strong> <span id="levelLabel">1/10</span></div>
+      <div class="timer"><strong>Tiempo:</strong> <span id="timeLabel">90</span>s</div>
+      <div class="target">🎯 Objetivo: <span id="targetLabel">$—</span></div>
+      <div class="current">💰 Llevas: <span id="currentLabel">$0</span></div>
+      <div class="stars" aria-label="Estrellas del nivel">
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+      </div>
+    </section>
+
+    <div class="progress" id="progress"></div>
+
+    <section class="board">
+      <div class="bank-area">
+        <div class="dropzone" id="drop">
+          <div class="empty-hint" id="emptyHint">Suelta aquí</div>
+          <div class="deposits" id="deposits" aria-live="polite"></div>
+        </div>
+        <div class="side-panel">
+          <div class="panel-card">
+            <div class="panel-title">Estado del nivel</div>
+            <div class="panel-row"><span>Objetivo</span> <strong id="targetLabelSide">$—</strong></div>
+            <div class="panel-row"><span>Actual</span> <strong id="currentLabelSide">$0</strong></div>
+            <div class="panel-row"><span>Pistas usadas</span> <strong id="hintsLabel">0</strong></div>
+            <div class="panel-row"><span>Reintentos</span> <strong id="retriesLabel">0</strong></div>
+          </div>
+          <div class="controls">
+            <button id="hintBtn" aria-label="Pista">¿Pista?</button>
+            <button id="undoBtn" class="secondary" aria-label="Deshacer último">Deshacer</button>
+            <button id="retryBtn" class="ghost" aria-label="Reintentar nivel">Reintentar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tray" aria-label="Bandeja de monedas y billetes">
+        <div class="panel-title">Elige y arrastra</div>
+        <div class="coins" id="coins">
+          <!-- generado por JS -->
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"><div id="toastTxt"></div></div>
+
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <p class="big">¡Buen trabajo!</p>
+      <div class="summary">
+        <div id="summaryTitle">Completaste el minijuego 🎉</div>
+        <div class="summary-grid">
+          <div>
+            <div class="panel-title">Estrellas</div>
+            <div style="font-size:28px;font-weight:900" id="sumStars">0 ⭐</div>
+          </div>
+          <div>
+            <div class="panel-title">XP Ganada</div>
+            <div style="font-size:28px;font-weight:900" id="sumXp">+0</div>
+          </div>
+          <div>
+            <div class="panel-title">Monedas</div>
+            <div style="font-size:28px;font-weight:900" id="sumCoins">+0</div>
+          </div>
+        </div>
+        <div class="panel-row" style="justify-content:center; gap:8px; margin-top:8px">
+          <button id="againBtn">Jugar de nuevo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==============================
+    // CONFIGURACIÓN RÁPIDA (MVP)
+    // ==============================
+    const CONFIG = {
+      currency: { symbol: '$', thousands: '.', minUnit: 10 },
+      // 10 niveles: se pueden ajustar para progresión gradual (múltiplos de 10)
+      levels: [20, 30, 50, 70, 100, 150, 200, 250, 300, 1010],
+      // monedas/billetes disponibles (MVP CLP)
+      denoms: [
+        { value: 10, label: '$10', class: 'coin-10', type: 'coin' },
+        { value: 50, label: '$50', class: 'coin-50', type: 'coin' },
+        { value: 100, label: '$100', class: 'coin-100', type: 'coin' },
+        { value: 1000, label: '$1.000', class: 'bill', type: 'bill' },
+      ],
+      // tiempo total de sesión (segundos)
+      sessionSeconds: 90,
+      // umbral de tiempo para 3★(tiempo) por nivel (segundos)
+      timeThresholds: [10, 12, 12, 14, 15, 15, 16, 18, 20, 20],
+      // recompensas
+      xpPerStar: 10,
+      coinsPerStar: 5,
+    };
+
+    // ========= UTILIDADES =========
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+    const fmt = (n) => {
+      // formatea CLP s/decimales
+      const s = n.toString();
+      return CONFIG.currency.symbol + s.replace(/\B(?=(\d{3})+(?!\d))/g, CONFIG.currency.thousands);
+    };
+
+    const within = (x, y, rect) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+
+    function toast(msg, ms=1100) {
+      const box = $('#toast');
+      $('#toastTxt').textContent = msg;
+      box.classList.add('show');
+      setTimeout(()=> box.classList.remove('show'), ms);
+    }
+
+    // ========= ESTADO =========
+    const state = {
+      levelIndex: 0,
+      current: 0,
+      deposits: [], // array de valores
+      hintsUsed: 0,
+      retries: 0,
+      overshot: false,
+      starsThisLevel: 0,
+      sessionLeft: CONFIG.sessionSeconds,
+      timerId: null,
+      levelStopwatchStart: 0,
+      telemetry: {
+        sessionStartAtISO: new Date().toISOString(),
+        levels: [],
+        totalStars: 0,
+        totalXp: 0,
+        totalCoins: 0,
+        endedReason: null,
+      },
+    };
+
+    // ========= INICIO =========
+    function init() {
+      // Render bandeja
+      const tray = $('#coins');
+      tray.innerHTML = '';
+      CONFIG.denoms.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'denom ' + (d.type === 'bill' ? 'bill' : d.class);
+        el.textContent = d.label;
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', d.label);
+        el.dataset.value = d.value;
+        el.addEventListener('pointerdown', (e)=> startDrag(e, d));
+        el.addEventListener('click', ()=> quickAdd(d)); // tap/click = sumar
+        tray.appendChild(el);
+      });
+
+      // Progreso 10 puntos
+      const p = $('#progress');
+      p.innerHTML = '';
+      for (let i=0;i<CONFIG.levels.length;i++) {
+        const d = document.createElement('div');
+        d.className = 'dot' + (i===0 ? ' active' : '');
+        p.appendChild(d);
+      }
+
+      $('#hintBtn').addEventListener('click', useHint);
+      $('#undoBtn').addEventListener('click', undoLast);
+      $('#retryBtn').addEventListener('click', retryLevel);
+      $('#againBtn').addEventListener('click', ()=> location.reload());
+
+      // sesión
+      updateHUD();
+      startSessionTimer();
+      startLevel(0);
+
+      // debug: ?debug=1
+      if (new URLSearchParams(location.search).get('debug') === '1') {
+        window.addEventListener('kidsfin-mini-telemetry', e => console.log('Telemetry event:', e.detail));
+      }
+    }
+
+    // ========= SESIÓN =========
+    function startSessionTimer() {
+      clearInterval(state.timerId);
+      state.sessionLeft = CONFIG.sessionSeconds;
+      $('#timeLabel').textContent = state.sessionLeft;
+      state.timerId = setInterval(()=>{
+        state.sessionLeft--; $('#timeLabel').textContent = state.sessionLeft;
+        if (state.sessionLeft <= 0) {
+          clearInterval(state.timerId);
+          finishSession('time-up');
+        }
+      }, 1000);
+    }
+
+    function finishSession(reason) {
+      state.telemetry.endedReason = reason;
+      // recompensa total basada en estrellas acumuladas
+      state.telemetry.totalXp = state.telemetry.totalStars * CONFIG.xpPerStar;
+      state.telemetry.totalCoins = state.telemetry.totalStars * CONFIG.coinsPerStar;
+
+      // persistencia cartera
+      const prevC = parseInt(localStorage.getItem('KidsFin:walletCoins') || '0', 10);
+      const prevX = parseInt(localStorage.getItem('KidsFin:walletXp') || '0', 10);
+      localStorage.setItem('KidsFin:walletCoins', String(prevC + state.telemetry.totalCoins));
+      localStorage.setItem('KidsFin:walletXp', String(prevX + state.telemetry.totalXp));
+
+      // guardar telemetría
+      try {
+        localStorage.setItem('KidsFin:telemetry:last', JSON.stringify(state.telemetry));
+        const hist = JSON.parse(localStorage.getItem('KidsFin:telemetry:history') || '[]');
+        hist.unshift(state.telemetry);
+        while (hist.length > 20) hist.pop();
+        localStorage.setItem('KidsFin:telemetry:history', JSON.stringify(hist));
+      } catch {}
+
+      // evento bridge
+      window.dispatchEvent(new CustomEvent('kidsfin-mini-telemetry', { detail: state.telemetry }));
+
+      // resumen
+      $('#sumStars').textContent = `${state.telemetry.totalStars} ⭐`;
+      $('#sumXp').textContent = `+${state.telemetry.totalXp}`;
+      $('#sumCoins').textContent = `+${state.telemetry.totalCoins}`;
+      $('#overlay').classList.add('show');
+      $('#summaryTitle').textContent = reason === 'completed' ? '¡Completaste los 10 niveles! 🎉' : '¡Tiempo agotado! ⏱️';
+    }
+
+    // ========= NIVELES =========
+    function startLevel(idx) {
+      state.levelIndex = idx;
+      state.current = 0;
+      state.deposits = [];
+      state.hintsUsed = 0;
+      state.retries = 0;
+      state.overshot = false;
+      state.starsThisLevel = 0;
+      $('#deposits').innerHTML = '';
+      $('#emptyHint').style.display = 'block';
+      updateHUD();
+      setDots();
+      state.levelStopwatchStart = performance.now();
+      highlightStars(0);
+    }
+
+    function nextLevel() {
+      const next = state.levelIndex + 1;
+      if (next >= CONFIG.levels.length) {
+        clearInterval(state.timerId);
+        finishSession('completed');
+        return;
+      }
+      startLevel(next);
+    }
+
+    function setDots() {
+      const dots = $$('#progress .dot');
+      dots.forEach((d,i)=>{
+        d.classList.remove('active');
+        if (i < state.levelIndex) d.classList.add('done');
+      });
+      dots[state.levelIndex]?.classList.add('active');
+    }
+
+    function updateHUD() {
+      const lvl = state.levelIndex + 1;
+      $('#levelLabel').textContent = `${lvl}/${CONFIG.levels.length}`;
+      $('#targetLabel').textContent = fmt(CONFIG.levels[state.levelIndex]);
+      $('#targetLabelSide').textContent = fmt(CONFIG.levels[state.levelIndex]);
+      $('#currentLabel').textContent = fmt(state.current);
+      $('#currentLabelSide').textContent = fmt(state.current);
+      $('#hintsLabel').textContent = state.hintsUsed;
+      $('#retriesLabel').textContent = state.retries;
+    }
+
+    function highlightStars(on) {
+      const stars = $$('.star');
+      stars.forEach((s, i)=> s.classList.toggle('on', i < on));
+    }
+
+    // ========= INTERACCIÓN =========
+    let dragEl = null; let dragVal = 0;
+    function startDrag(e, denom) {
+      e.preventDefault();
+      const rect = e.target.getBoundingClientRect();
+      dragEl = e.target.cloneNode(true);
+      dragEl.classList.add('dragging');
+      dragVal = denom.value;
+      document.body.appendChild(dragEl);
+      moveDrag(e);
+      window.addEventListener('pointermove', moveDrag);
+      window.addEventListener('pointerup', endDrag, { once: true });
+    }
+    function moveDrag(e) {
+      if (!dragEl) return;
+      dragEl.style.left = e.clientX + 'px';
+      dragEl.style.top = e.clientY + 'px';
+    }
+    function endDrag(e) {
+      const drop = $('#drop').getBoundingClientRect();
+      if (dragEl && within(e.clientX, e.clientY, drop)) {
+        addDeposit(dragVal);
+      }
+      dragEl?.remove(); dragEl = null; dragVal = 0;
+      window.removeEventListener('pointermove', moveDrag);
+    }
+
+    function quickAdd(denom) {
+      addDeposit(denom.value);
+    }
+
+    function addDeposit(value) {
+      $('#emptyHint').style.display = 'none';
+      state.deposits.push(value);
+      state.current += value;
+      renderDeposits();
+      updateHUD();
+      if (state.current > CONFIG.levels[state.levelIndex]) {
+        state.overshot = true;
+        toast('Te pasaste, saca alguna moneda ❗');
+      }
+      checkWin();
+    }
+
+    function renderDeposits() {
+      const wrap = $('#deposits');
+      wrap.innerHTML = '';
+      state.deposits.forEach((v, i)=>{
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `${fmt(v)} <span aria-hidden="true">✕</span>`;
+        chip.title = 'Quitar';
+        chip.addEventListener('click', ()=> removeDeposit(i));
+        wrap.appendChild(chip);
+      });
+    }
+    function removeDeposit(index) {
+      const v = state.deposits[index];
+      state.deposits.splice(index, 1);
+      state.current -= v;
+      if (state.deposits.length === 0) $('#emptyHint').style.display = 'block';
+      renderDeposits();
+      updateHUD();
+    }
+
+    function undoLast() {
+      if (!state.deposits.length) return;
+      removeDeposit(state.deposits.length - 1);
+    }
+
+    function retryLevel() {
+      state.retries++;
+      state.current = 0; state.deposits = []; state.overshot = false; state.hintsUsed = 0;
+      $('#deposits').innerHTML = ''; $('#emptyHint').style.display = 'block';
+      updateHUD();
+      highlightStars(0);
+    }
+
+    function useHint() {
+      const target = CONFIG.levels[state.levelIndex];
+      const delta = Math.max(0, target - state.current);
+      if (delta === 0) return;
+      state.hintsUsed++;
+      updateHUD();
+      // Sugiere la mayor denom <= delta
+      let pick = CONFIG.denoms.slice().sort((a,b)=> b.value - a.value).find(d => d.value <= delta);
+      if (!pick) return;
+      // resalta en bandeja
+      const idx = CONFIG.denoms.findIndex(d=> d.value === pick.value);
+      const el = $$('#coins .denom')[idx];
+      el.classList.add('pulse');
+      setTimeout(()=> el.classList.remove('pulse'), 900);
+    }
+
+    function checkWin() {
+      const target = CONFIG.levels[state.levelIndex];
+      if (state.current === target) {
+        const elapsed = performance.now() - state.levelStopwatchStart;
+        const elapsedSec = elapsed / 1000;
+        const timeOk = elapsedSec <= CONFIG.timeThresholds[state.levelIndex];
+        const hintOk = state.hintsUsed === 0;
+        const accuracyOk = !state.overshot; // no se pasó en ningún momento
+
+        const stars = (accuracyOk?1:0) + (timeOk?1:0) + (hintOk?1:0);
+        state.starsThisLevel = stars;
+        state.telemetry.totalStars += stars;
+
+        highlightStars(stars);
+
+        // guardar nivel
+        state.telemetry.levels.push({
+          level: state.levelIndex + 1,
+          target,
+          success: true,
+          exact: true,
+          timeMs: Math.round(elapsed),
+          hintsUsed: state.hintsUsed,
+          retries: state.retries,
+          overshot: state.overshot,
+          finalCombination: state.deposits.slice(),
+          stars,
+        });
+
+        toast(`¡Perfecto! ${fmt(target)} logrado • ${stars}★`);
+
+        // avanzar
+        setTimeout(()=>{
+          // marcar progreso
+          const dots = $$('#progress .dot');
+          dots[state.levelIndex]?.classList.add('done');
+          nextLevel();
+        }, 800);
+      }
+    }
+
+    // ====== START ======
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

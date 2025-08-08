@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KidsFin • Necesidad o Deseo</title>
+  <style>
+    /*
+      KidsFin - Minijuego: Necesidad o Deseo (MVP)
+      Mecánica: arrastra o toca para clasificar la tarjeta actual en "Necesidad" o "Deseo".
+      Público: 4–8 años.
+
+      ✨ Telemetría guardada en localStorage y evento window:
+        - Keys: "KidsFin:telemetry:last", "KidsFin:telemetry:history",
+                 "KidsFin:walletCoins", "KidsFin:walletXp"
+        - Evento: window 'kidsfin-mini-telemetry' (detail: objeto de sesión)
+
+      ⚙️ Config: ver constante CONFIG en <script>.
+    */
+
+    :root {
+      --bg: #f6f8ff;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --brand: #22c55e; /* verde amable */
+      --ok: #16a34a;    /* correcto */
+      --bad: #ef4444;   /* error */
+      --shadow: 0 8px 22px rgba(0,0,0,.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      color: var(--ink); background: radial-gradient(1200px 600px at 30% -10%, #ecfeff 0%, var(--bg) 60%);
+      touch-action: none; /* mejor DnD en mobile */
+    }
+
+    .app { max-width: 980px; margin: 0 auto; padding: 16px; }
+
+    header { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; margin: 8px 0 12px; }
+    .title { display: flex; align-items: center; gap: 12px; }
+    .icon {
+      width: 40px; aspect-ratio: 1; border-radius: 12px; background: linear-gradient(145deg, #bbf7d0, #86efac);
+      display: grid; place-items: center; font-size: 22px; box-shadow: var(--shadow);
+    }
+    h1 { font-size: clamp(20px, 4vw, 28px); margin: 0; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    .badge { background: #dcfce7; color: #166534; padding: 6px 10px; border-radius: 999px; font-weight: 800; }
+
+    .hud { display: grid; grid-template-columns: repeat(2, 1fr) repeat(3, auto); gap: 10px; align-items: center;
+      background: var(--panel); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow);
+      font-size: clamp(14px, 2.2vw, 16px);
+    }
+    .stars { display: inline-flex; gap: 4px; }
+    .star { width: 18px; height: 18px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); opacity: .35; }
+    .star.on { opacity: 1; }
+
+    .progress { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin: 10px 0 14px; }
+    .dot { height: 8px; border-radius: 999px; background: #d1fae5; }
+    .dot.active { background: #34d399; }
+    .dot.done { background: #10b981; }
+
+    .board { display: grid; gap: 14px; }
+
+    .zones {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .zone { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; min-height: 160px;
+      display: grid; grid-template-rows: auto 1fr; align-items: center; justify-items: center; position: relative; border: 3px dashed #bbf7d0;
+      transition: transform .08s ease;
+    }
+    .zone:hover { transform: translateY(-1px); }
+    .zone-label { font-weight: 900; font-size: 18px; display: inline-flex; align-items: center; gap: 8px; }
+    .zone .hint { position: absolute; bottom: 8px; font-size: 12px; color: var(--muted); }
+    .zone.correct { outline: 3px solid var(--ok); }
+    .zone.wrong { outline: 3px solid var(--bad); }
+
+    .stage { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; min-height: 180px;
+      display: grid; place-items: center;
+    }
+
+    .card {
+      user-select: none; cursor: grab; background: linear-gradient(145deg, #eef2ff, #ffffff);
+      border: 3px solid #c7d2fe; border-radius: 20px; box-shadow: var(--shadow);
+      min-width: min(420px, 88vw); min-height: 120px; padding: 14px; display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center;
+      transform: translateZ(0); transition: transform .1s ease;
+    }
+    .card:active { transform: scale(.98); }
+    .big-emoji { font-size: 48px; }
+    .card-title { font-weight: 900; font-size: clamp(18px, 3.5vw, 22px); }
+    .card-sub { color: var(--muted); font-size: 14px; }
+
+    .dragging { position: fixed; pointer-events: none; z-index: 50; transform: translate(-50%, -50%) scale(1.05); }
+
+    .controls { display: flex; gap: 8px; justify-content: center; }
+    button { appearance: none; border: 0; background: var(--brand); color: white; padding: 10px 14px; border-radius: 999px;
+      font-weight: 800; letter-spacing: .2px; box-shadow: var(--shadow); cursor: pointer; font-size: 15px; }
+    button.secondary { background: #111827; }
+    button.ghost { background: #e5e7eb; color: #111827; }
+
+    .toast { position: fixed; inset: auto 12px 12px 12px; display: grid; justify-items: center; pointer-events: none; }
+    .toast > div { background: #111827; color: white; padding: 8px 12px; border-radius: 10px; opacity: 0; transform: translateY(8px);
+      transition: all .25s ease; font-size: 14px; }
+    .toast.show > div { opacity: 1; transform: translateY(0); }
+
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.48); display: none; align-items: center; justify-content: center; padding: 16px; }
+    .overlay.show { display: flex; }
+    .card-modal { background: var(--panel); border-radius: 20px; padding: 18px; width: min(680px, 96vw); box-shadow: var(--shadow); text-align: center; }
+    .big { font-size: 22px; font-weight: 900; margin: 0 0 6px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .panel-title { font-weight: 800; font-size: 14px; margin-bottom: 6px; color: #334155; }
+
+    @keyframes pulse { 0%{ transform: scale(1); } 50%{ transform: scale(1.06); } 100%{ transform: scale(1); } }
+    .pulse { animation: pulse .9s ease-in-out 1; }
+    .shake { animation: shake .4s; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    @media (max-width: 760px) {
+      .hud { grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(30px, auto); }
+      .zones { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="title">
+        <div class="icon" aria-hidden="true">🧠</div>
+        <div>
+          <h1>Necesidad o Deseo</h1>
+          <div class="subtitle">Arrastra la <strong>tarjeta</strong> a la canasta correcta. ¡Aprende a priorizar!</div>
+        </div>
+      </div>
+      <div><span class="badge">KidsFin • MVP</span></div>
+    </header>
+
+    <section class="hud" aria-live="polite">
+      <div><strong>Nivel:</strong> <span id="levelLabel">1/10</span></div>
+      <div class="timer"><strong>Tiempo:</strong> <span id="timeLabel">90</span>s</div>
+      <div><strong>Quedan:</strong> <span id="leftLabel">—</span></div>
+      <div class="stars" aria-label="Estrellas del nivel">
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+      </div>
+      <div style="justify-self:end" class="controls">
+        <button id="hintBtn" aria-label="Pista">¿Pista?</button>
+        <button id="retryBtn" class="ghost" aria-label="Reintentar nivel">Reintentar</button>
+      </div>
+    </section>
+
+    <div class="progress" id="progress"></div>
+
+    <section class="board">
+      <div class="stage" id="stage">
+        <!-- Tarjeta actual -->
+      </div>
+
+      <div class="zones">
+        <div class="zone" id="zoneNeed">
+          <div class="zone-label">🛡️ Necesidad</div>
+          <div class="hint">Cosas importantes para vivir y estar bien</div>
+        </div>
+        <div class="zone" id="zoneWant">
+          <div class="zone-label">🎈 Deseo</div>
+          <div class="hint">Cosas que queremos, pero podemos esperar</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"><div id="toastTxt"></div></div>
+
+  <div class="overlay" id="overlay">
+    <div class="card-modal">
+      <p class="big">¡Buen trabajo!</p>
+      <div id="summaryTitle">Terminaste la sesión 🎉</div>
+      <div class="summary-grid" style="margin-top:8px">
+        <div>
+          <div class="panel-title">Estrellas</div>
+          <div style="font-size:28px;font-weight:900" id="sumStars">0 ⭐</div>
+        </div>
+        <div>
+          <div class="panel-title">XP Ganada</div>
+          <div style="font-size:28px;font-weight:900" id="sumXp">+0</div>
+        </div>
+        <div>
+          <div class="panel-title">Monedas</div>
+          <div style="font-size:28px;font-weight:900" id="sumCoins">+0</div>
+        </div>
+      </div>
+      <div class="controls" style="margin-top:10px">
+        <button id="againBtn">Jugar de nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==============================
+    // CONFIGURACIÓN (MVP)
+    // ==============================
+    const CONFIG = {
+      gameId: 'need-want',
+      sessionSeconds: 90,
+      // tarjetas por nivel (10 niveles)
+      levelCardCounts: [3,3,4,4,4,5,5,5,6,6],
+      // umbral de tiempo (segundos) para ⭐ de tiempo por nivel
+      timeThresholds: [8,10,12,12,13,14,16,18,20,22],
+      // recompensas por estrella
+      xpPerStar: 10,
+      coinsPerStar: 5,
+    };
+
+    const ITEMS = [
+      // Necesidades
+      { id:'agua', label:'Agua', emoji:'💧', type:'need' },
+      { id:'pan', label:'Pan', emoji:'🍞', type:'need' },
+      { id:'frutas', label:'Frutas', emoji:'🍎', type:'need' },
+      { id:'ropaInv', label:'Ropa de invierno', emoji:'🧥', type:'need' },
+      { id:'meds', label:'Medicinas', emoji:'💊', type:'need' },
+      { id:'lapices', label:'Lápices para la escuela', emoji:'✏️', type:'need' },
+      { id:'libros', label:'Libros de escuela', emoji:'📚', type:'need' },
+      { id:'bus', label:'Transporte (bus)', emoji:'🚌', type:'need' },
+      { id:'cepillo', label:'Cepillo de dientes', emoji:'🪥', type:'need' },
+      { id:'zapatos', label:'Zapatos escolares', emoji:'👟', type:'need' },
+      // Deseos
+      { id:'helado', label:'Helado', emoji:'🍦', type:'want' },
+      { id:'caramelo', label:'Caramelo', emoji:'🍬', type:'want' },
+      { id:'juguete', label:'Juguete sorpresa', emoji:'🎁', type:'want' },
+      { id:'videojuego', label:'Videojuego', emoji:'🎮', type:'want' },
+      { id:'figuritas', label:'Figuritas', emoji:'🃏', type:'want' },
+      { id:'fiesta', label:'Gorro de fiesta', emoji:'🎉', type:'want' },
+      { id:'muneca', label:'Muñeca', emoji:'🧸', type:'want' },
+      { id:'patineta', label:'Patineta', emoji:'🛹', type:'want' },
+      { id:'galletas', label:'Galletas', emoji:'🍪', type:'want' },
+      { id:'refresco', label:'Refresco', emoji:'🥤', type:'want' },
+    ];
+
+    // ========= UTILIDADES =========
+    const $ = (s,el=document)=> el.querySelector(s);
+    const $$ = (s,el=document)=> Array.from(el.querySelectorAll(s));
+    const shuffle = (arr)=> arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+
+    function toast(msg, ms=1100) {
+      const box = $('#toast');
+      $('#toastTxt').textContent = msg;
+      box.classList.add('show');
+      setTimeout(()=> box.classList.remove('show'), ms);
+    }
+
+    // ========= ESTADO =========
+    const state = {
+      levelIndex: 0,
+      items: [], // items del nivel
+      cursor: 0, // índice de tarjeta actual
+      errors: 0,
+      hintsUsed: 0,
+      retries: 0,
+      starsThisLevel: 0,
+      sessionLeft: CONFIG.sessionSeconds,
+      timerId: null,
+      levelStartedAt: 0,
+      telemetry: {
+        gameId: CONFIG.gameId,
+        sessionStartAtISO: new Date().toISOString(),
+        levels: [],
+        totalStars: 0,
+        totalXp: 0,
+        totalCoins: 0,
+        endedReason: null,
+      },
+    };
+
+    // ========= INICIO =========
+    function init(){
+      // Dots progreso
+      const p = $('#progress'); p.innerHTML = '';
+      for (let i=0;i<10;i++){ const d=document.createElement('div'); d.className='dot'+(i===0?' active':''); p.appendChild(d); }
+
+      // Botones
+      $('#hintBtn').addEventListener('click', useHint);
+      $('#retryBtn').addEventListener('click', retryLevel);
+      $('#againBtn').addEventListener('click', ()=> location.reload());
+
+      // Zonas clicables (para niños que no arrastran)
+      $('#zoneNeed').addEventListener('click', ()=> submitChoice('need'));
+      $('#zoneWant').addEventListener('click', ()=> submitChoice('want'));
+
+      // Timers
+      startSessionTimer();
+      startLevel(0);
+
+      if (new URLSearchParams(location.search).get('debug')==='1') {
+        window.addEventListener('kidsfin-mini-telemetry', e=> console.log('Telemetry:', e.detail));
+      }
+    }
+
+    function startSessionTimer(){
+      clearInterval(state.timerId);
+      state.sessionLeft = CONFIG.sessionSeconds;
+      $('#timeLabel').textContent = state.sessionLeft;
+      state.timerId = setInterval(()=>{
+        state.sessionLeft--; $('#timeLabel').textContent = state.sessionLeft;
+        if (state.sessionLeft <= 0){ clearInterval(state.timerId); finishSession('time-up'); }
+      }, 1000);
+    }
+
+    function finishSession(reason){
+      state.telemetry.endedReason = reason;
+      state.telemetry.totalXp = state.telemetry.totalStars * CONFIG.xpPerStar;
+      state.telemetry.totalCoins = state.telemetry.totalStars * CONFIG.coinsPerStar;
+
+      const prevC = parseInt(localStorage.getItem('KidsFin:walletCoins')||'0',10);
+      const prevX = parseInt(localStorage.getItem('KidsFin:walletXp')||'0',10);
+      localStorage.setItem('KidsFin:walletCoins', String(prevC + state.telemetry.totalCoins));
+      localStorage.setItem('KidsFin:walletXp', String(prevX + state.telemetry.totalXp));
+
+      try {
+        localStorage.setItem('KidsFin:telemetry:last', JSON.stringify(state.telemetry));
+        const hist = JSON.parse(localStorage.getItem('KidsFin:telemetry:history')||'[]');
+        hist.unshift(state.telemetry); while (hist.length>20) hist.pop();
+        localStorage.setItem('KidsFin:telemetry:history', JSON.stringify(hist));
+      } catch {}
+
+      window.dispatchEvent(new CustomEvent('kidsfin-mini-telemetry', { detail: state.telemetry }));
+
+      $('#sumStars').textContent = `${state.telemetry.totalStars} ⭐`;
+      $('#sumXp').textContent = `+${state.telemetry.totalXp}`;
+      $('#sumCoins').textContent = `+${state.telemetry.totalCoins}`;
+      $('#summaryTitle').textContent = reason==='completed' ? '¡Completaste los 10 niveles! 🎉' : '¡Tiempo agotado! ⏱️';
+      $('#overlay').classList.add('show');
+    }
+
+    // ========= NIVELES =========
+    function startLevel(idx){
+      state.levelIndex = idx;
+      state.errors = 0; state.hintsUsed = 0; state.retries = 0; state.starsThisLevel = 0;
+      const n = CONFIG.levelCardCounts[idx];
+      state.items = buildLevelItems(n);
+      state.cursor = 0;
+      state.levelStartedAt = performance.now();
+      updateHUD();
+      setDots();
+      renderCurrent();
+      highlightStars(0);
+    }
+
+    function buildLevelItems(n){
+      // Asegura al menos 1 de cada categoría
+      const needs = shuffle(ITEMS.filter(i=> i.type==='need'));
+      const wants = shuffle(ITEMS.filter(i=> i.type==='want'));
+      const out = [];
+      const minEach = Math.min(1, Math.floor(n/2)); // al menos 1 y que quepa
+      out.push(...needs.slice(0, Math.max(minEach,1)));
+      out.push(...wants.slice(0, Math.max(minEach,1)));
+      while (out.length < n){
+        const pool = Math.random()<0.5 ? needs : wants;
+        const pick = pool[Math.floor(Math.random()*pool.length)];
+        if (!out.some(x=> x.id===pick.id)) out.push(pick);
+      }
+      return shuffle(out);
+    }
+
+    function nextLevel(){
+      const next = state.levelIndex + 1;
+      if (next >= 10){ clearInterval(state.timerId); finishSession('completed'); return; }
+      startLevel(next);
+    }
+
+    function setDots(){
+      const dots = $$('#progress .dot');
+      dots.forEach((d,i)=>{ d.classList.remove('active'); if (i < state.levelIndex) d.classList.add('done'); });
+      dots[state.levelIndex]?.classList.add('active');
+    }
+
+    function updateHUD(){
+      $('#levelLabel').textContent = `${state.levelIndex+1}/10`;
+      $('#leftLabel').textContent = `${state.items.length - state.cursor}`;
+    }
+
+    function highlightStars(on){
+      const stars = $$('.star'); stars.forEach((s,i)=> s.classList.toggle('on', i < on));
+    }
+
+    // ========= TARJETA ACTUAL =========
+    let dragEl = null;
+    function renderCurrent(){
+      const stage = $('#stage'); stage.innerHTML = '';
+      if (state.cursor >= state.items.length){ onLevelComplete(); return; }
+      const it = state.items[state.cursor];
+      const card = document.createElement('div'); card.className='card'; card.id='currentCard';
+      card.innerHTML = `
+        <div class="big-emoji">${it.emoji}</div>
+        <div>
+          <div class="card-title">${it.label}</div>
+          <div class="card-sub">¿Es una <strong>${it.type==='need'?'necesidad':'deseo'}</strong>? ¡Clasifica! (arrastra o toca una canasta)</div>
+        </div>`;
+      card.addEventListener('pointerdown', startDrag);
+      stage.appendChild(card);
+    }
+
+    function startDrag(e){
+      const card = e.currentTarget;
+      dragEl = card.cloneNode(true);
+      dragEl.classList.add('dragging');
+      document.body.appendChild(dragEl);
+      moveDrag(e);
+      window.addEventListener('pointermove', moveDrag);
+      window.addEventListener('pointerup', endDrag, { once: true });
+    }
+    function moveDrag(e){ if (!dragEl) return; dragEl.style.left = e.clientX+'px'; dragEl.style.top = e.clientY+'px'; }
+    function endDrag(e){
+      const needR = $('#zoneNeed').getBoundingClientRect();
+      const wantR = $('#zoneWant').getBoundingClientRect();
+      if (within(e.clientX,e.clientY,needR)) submitChoice('need');
+      else if (within(e.clientX,e.clientY,wantR)) submitChoice('want');
+      dragEl?.remove(); dragEl=null; window.removeEventListener('pointermove', moveDrag);
+    }
+    const within = (x,y,r)=> x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+
+    // ========= LÓGICA DE RESPUESTA =========
+    function submitChoice(choice){
+      if (state.cursor >= state.items.length) return;
+      const it = state.items[state.cursor];
+      const correct = (choice === it.type);
+
+      flashZone(choice, correct);
+
+      // registra intento (nivel)
+      const lvl = state.levelIndex + 1;
+      ensureLevelTelemetry(lvl);
+      const L = state.telemetry.levels[lvl-1];
+      L.items.push({ id: it.id, label: it.label, type: it.type, choice, correct, attempts: (L.items.filter(x=>x.id===it.id).length+1) });
+
+      if (correct){
+        toast('¡Bien! ✔');
+        state.cursor++;
+        updateHUD();
+        setTimeout(renderCurrent, 350);
+      } else {
+        state.errors++;
+        const c = $('#currentCard'); c.classList.add('shake'); setTimeout(()=> c.classList.remove('shake'), 420);
+        toast('Ups, intenta de nuevo');
+      }
+    }
+
+    function flashZone(zone, ok){
+      const el = zone==='need' ? $('#zoneNeed') : $('#zoneWant');
+      el.classList.add(ok ? 'correct' : 'wrong');
+      setTimeout(()=> el.classList.remove('correct','wrong'), 400);
+    }
+
+    function ensureLevelTelemetry(lvl){
+      if (!state.telemetry.levels[lvl-1]){
+        state.telemetry.levels[lvl-1] = {
+          level: lvl, success: false, timeMs: 0, hintsUsed: 0, retries: 0, errors: 0, stars: 0, items: []
+        };
+      }
+    }
+
+    function useHint(){
+      if (state.cursor >= state.items.length) return;
+      state.hintsUsed++;
+      const it = state.items[state.cursor];
+      // resalta canasta correcta sin decir la palabra
+      const targetZone = it.type==='need' ? $('#zoneNeed') : $('#zoneWant');
+      targetZone.classList.add('pulse'); setTimeout(()=> targetZone.classList.remove('pulse'), 900);
+    }
+
+    function retryLevel(){
+      state.retries++;
+      startLevel(state.levelIndex);
+    }
+
+    function onLevelComplete(){
+      const elapsedSec = (performance.now() - state.levelStartedAt) / 1000;
+      const timeOk = elapsedSec <= CONFIG.timeThresholds[state.levelIndex];
+      const hintOk = state.hintsUsed === 0;
+      const accuracyOk = state.errors === 0;
+      const stars = (accuracyOk?1:0) + (timeOk?1:0) + (hintOk?1:0);
+      state.starsThisLevel = stars;
+      state.telemetry.totalStars += stars;
+
+      const lvl = state.levelIndex + 1;
+      ensureLevelTelemetry(lvl);
+      const L = state.telemetry.levels[lvl-1];
+      L.success = true;
+      L.timeMs = Math.round(elapsedSec*1000);
+      L.hintsUsed = state.hintsUsed;
+      L.retries = state.retries;
+      L.errors = state.errors;
+      L.stars = stars;
+
+      highlightStars(stars);
+      toast(`Nivel ${lvl} ¡listo! ${stars}★`);
+
+      // marcar progreso visual y avanzar
+      const dots = $$('#progress .dot'); dots[state.levelIndex]?.classList.add('done');
+      setTimeout(nextLevel, 700);
+    }
+
+    // ====== START ======
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

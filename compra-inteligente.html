@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KidsFin • Compra Inteligente</title>
+  <style>
+    /*
+      KidsFin - Minijuego: Compra Inteligente (MVP)
+      Conceptos: comparar precios (más barato) y presupuesto (ahorro).
+      Público: 4–8 años.
+
+      Mecánicas por nivel:
+        - Niveles 1–5: "Elige el más barato" entre dos opciones.
+        - Niveles 6–10: "¿Cuál deja más ahorro?" con un presupuesto visible.
+
+      Telemetría local:
+        - localStorage: KidsFin:telemetry:last, KidsFin:telemetry:history,
+                        KidsFin:walletCoins, KidsFin:walletXp
+        - Event: window 'kidsfin-mini-telemetry' con detail del resumen de sesión.
+    */
+
+    :root {
+      --bg: #f6f8ff; --panel: #ffffff; --ink: #111827; --muted: #6b7280;
+      --brand: #06b6d4; --ok: #16a34a; --bad: #ef4444; --shadow: 0 8px 22px rgba(0,0,0,.08);
+      --radius: 18px;
+    }
+    *{ box-sizing: border-box; }
+    html,body{ height:100%; }
+    body{ margin:0; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      color:var(--ink); background: radial-gradient(1200px 600px at 30% -10%, #cffafe 0%, var(--bg) 60%);
+      touch-action: manipulation;
+    }
+    .app{ max-width: 980px; margin:0 auto; padding:16px; }
+
+    header{ display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; margin:8px 0 12px; }
+    .title{ display:flex; gap:12px; align-items:center; }
+    .icon{ width:40px; aspect-ratio:1; border-radius:12px; background:linear-gradient(145deg, #67e8f9, #22d3ee); display:grid; place-items:center; font-size:22px; box-shadow: var(--shadow); }
+    h1{ margin:0; font-size: clamp(20px, 4vw, 28px); }
+    .subtitle{ color:var(--muted); font-size:14px; }
+    .badge{ background:#cffafe; color:#155e75; padding:6px 10px; border-radius:999px; font-weight:800; }
+
+    .hud{ display:grid; grid-template-columns: repeat(2, 1fr) repeat(3, auto); gap:10px; align-items:center; background:var(--panel); border-radius: var(--radius); padding:12px; box-shadow: var(--shadow); font-size: clamp(14px, 2.2vw, 16px); }
+    .stars{ display:inline-flex; gap:4px; }
+    .star{ width:18px; height:18px; opacity:.35; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+    .star.on{ opacity:1; }
+
+    .progress{ display:grid; grid-template-columns: repeat(10, 1fr); gap:4px; margin:10px 0 14px; }
+    .dot{ height:8px; border-radius:999px; background:#bae6fd; }
+    .dot.active{ background:#38bdf8; }
+    .dot.done{ background:#0ea5e9; }
+
+    .board{ display:grid; gap:14px; }
+    .stage{ background:var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding:14px; min-height: 220px; display:grid; gap:12px; }
+
+    .mode-banner{ display:flex; justify-content:center; align-items:center; gap:8px; font-weight:900; color:#0f766e; background:#ecfeff; border:2px dashed #67e8f9; border-radius:12px; padding:8px; }
+    .budget{ justify-self:center; background:#f0f9ff; border:2px solid #bae6fd; padding:6px 10px; border-radius:999px; font-weight:900; }
+
+    .cards{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .card{ user-select:none; cursor:pointer; background:linear-gradient(145deg, #eef2ff, #ffffff); border:3px solid #c7d2fe; border-radius:20px; box-shadow: var(--shadow); padding:14px; display:grid; grid-template-columns: 72px 1fr; gap:12px; align-items:center; transition: transform .08s ease; }
+    .card:active{ transform: scale(.98); }
+    .emoji{ font-size:48px; }
+    .card-title{ font-weight:900; font-size: clamp(18px, 3.5vw, 22px); }
+    .price{ font-weight:900; font-size: 18px; }
+    .muted{ color: var(--muted); font-size: 13px; }
+
+    .correct{ outline:3px solid var(--ok); }
+    .wrong{ outline:3px solid var(--bad); }
+    .pulse{ animation: pulse .9s ease-in-out 1; }
+    @keyframes pulse{ 0%{ transform: scale(1);} 50%{ transform: scale(1.06);} 100%{ transform: scale(1);} }
+
+    .controls{ display:flex; gap:8px; justify-content:center; }
+    button{ appearance:none; border:0; background:var(--brand); color:white; padding:10px 14px; border-radius:999px; font-weight:800; letter-spacing:.2px; box-shadow: var(--shadow); cursor:pointer; font-size:15px; }
+    button.ghost{ background:#e5e7eb; color:#111827; }
+
+    .toast{ position:fixed; inset:auto 12px 12px 12px; display:grid; justify-items:center; pointer-events:none; }
+    .toast>div{ background:#111827; color:white; padding:8px 12px; border-radius:10px; opacity:0; transform: translateY(8px); transition: all .25s ease; font-size:14px; }
+    .toast.show>div{ opacity:1; transform: translateY(0); }
+
+    .overlay{ position:fixed; inset:0; background: rgba(0,0,0,.48); display:none; align-items:center; justify-content:center; padding:16px; }
+    .overlay.show{ display:flex; }
+    .card-modal{ background:var(--panel); border-radius:20px; padding:18px; width:min(680px,96vw); box-shadow:var(--shadow); text-align:center; }
+    .big{ font-size:22px; font-weight:900; margin:0 0 6px; }
+    .summary-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+    .panel-title{ font-weight:800; font-size:14px; margin-bottom:6px; color:#334155; }
+
+    @media (max-width:760px){ .hud{ grid-template-columns:1fr 1fr; grid-auto-rows:minmax(30px,auto); } }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="title">
+        <div class="icon" aria-hidden="true">🛒</div>
+        <div>
+          <h1>Compra Inteligente</h1>
+          <div class="subtitle">Primero, elige <strong>el más barato</strong>. Luego, el que <strong>deja más ahorro</strong> con tu presupuesto.</div>
+        </div>
+      </div>
+      <div><span class="badge">KidsFin • MVP</span></div>
+    </header>
+
+    <section class="hud" aria-live="polite">
+      <div><strong>Nivel:</strong> <span id="levelLabel">1/10</span></div>
+      <div><strong>Tiempo:</strong> <span id="timeLabel">90</span>s</div>
+      <div><strong>Rondas:</strong> <span id="roundLabel">—</span></div>
+      <div class="stars" aria-label="Estrellas del nivel">
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+      </div>
+      <div style="justify-self:end" class="controls">
+        <button id="hintBtn" aria-label="Pista">¿Pista?</button>
+        <button id="retryBtn" class="ghost" aria-label="Reintentar nivel">Reintentar</button>
+      </div>
+    </section>
+
+    <div class="progress" id="progress"></div>
+
+    <section class="board">
+      <div class="stage">
+        <div class="mode-banner" id="modeBanner">🟦 Modo: Elige el más barato</div>
+        <div class="budget" id="budgetBox" style="display:none"></div>
+        <div class="cards" id="cards"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"><div id="toastTxt"></div></div>
+
+  <div class="overlay" id="overlay">
+    <div class="card-modal">
+      <p class="big">¡Buen trabajo!</p>
+      <div id="summaryTitle">Terminaste la sesión 🎉</div>
+      <div class="summary-grid" style="margin-top:8px">
+        <div>
+          <div class="panel-title">Estrellas</div>
+          <div style="font-size:28px;font-weight:900" id="sumStars">0 ⭐</div>
+        </div>
+        <div>
+          <div class="panel-title">XP Ganada</div>
+          <div style="font-size:28px;font-weight:900" id="sumXp">+0</div>
+        </div>
+        <div>
+          <div class="panel-title">Monedas</div>
+          <div style="font-size:28px;font-weight:900" id="sumCoins">+0</div>
+        </div>
+      </div>
+      <div class="controls" style="margin-top:10px">
+        <button id="againBtn">Jugar de nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==============================
+    // CONFIGURACIÓN
+    // ==============================
+    const CONFIG = {
+      gameId: 'smart-buy',
+      currency: { symbol: '$', thousands: '.' },
+      sessionSeconds: 90,
+      // Rondas por nivel (dificultad progresiva)
+      roundsPerLevel: [2,2,2,3,3,3,3,4,4,4],
+      timeThresholds:   [10,10,12,12,13,14,16,18,20,22],
+      xpPerStar: 10,
+      coinsPerStar: 5,
+    };
+
+    const PRODUCTS = [
+      { id:'manzana', name:'Manzana', emoji:'🍎' },
+      { id:'pan', name:'Pan', emoji:'🍞' },
+      { id:'leche', name:'Leche', emoji:'🥛' },
+      { id:'arroz', name:'Arroz', emoji:'🍚' },
+      { id:'jugo', name:'Jugo', emoji:'🧃' },
+      { id:'yogurt', name:'Yogurt', emoji:'🥛' },
+      { id:'galletas', name:'Galletas', emoji:'🍪' },
+      { id:'queso', name:'Queso', emoji:'🧀' },
+      { id:'huevo', name:'Huevos', emoji:'🥚' },
+      { id:'platano', name:'Plátano', emoji:'🍌' },
+    ];
+
+    // ==============================
+    // UTILIDADES
+    // ==============================
+    const $ = (s,el=document)=> el.querySelector(s);
+    const $$ = (s,el=document)=> Array.from(el.querySelectorAll(s));
+    const rnd = (min,max,step=10)=> Math.round((Math.random()*(max-min)+min)/step)*step;
+    const pick = (arr)=> arr[Math.floor(Math.random()*arr.length)];
+    const shuffle = (arr)=> arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+    const fmt = (n)=> CONFIG.currency.symbol + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, CONFIG.currency.thousands);
+
+    function toast(msg, ms=1100){ const box=$('#toast'); $('#toastTxt').textContent=msg; box.classList.add('show'); setTimeout(()=>box.classList.remove('show'), ms); }
+
+    // ==============================
+    // ESTADO
+    // ==============================
+    const state = {
+      levelIndex: 0,
+      roundIndex: 0,
+      rounds: [], // por nivel
+      errors: 0,
+      hintsUsed: 0,
+      retries: 0,
+      sessionLeft: CONFIG.sessionSeconds,
+      timerId: null,
+      levelStartedAt: 0,
+      telemetry: {
+        gameId: CONFIG.gameId,
+        sessionStartAtISO: new Date().toISOString(),
+        levels: [],
+        totalStars: 0,
+        totalXp: 0,
+        totalCoins: 0,
+        endedReason: null,
+      },
+    };
+
+    // ==============================
+    // INICIO
+    // ==============================
+    function init(){
+      // Progreso visual
+      const p = $('#progress'); p.innerHTML='';
+      for(let i=0;i<10;i++){ const d=document.createElement('div'); d.className='dot'+(i===0?' active':''); p.appendChild(d); }
+
+      $('#hintBtn').addEventListener('click', useHint);
+      $('#retryBtn').addEventListener('click', retryLevel);
+      $('#againBtn').addEventListener('click', ()=> location.reload());
+
+      startSessionTimer();
+      startLevel(0);
+
+      if (new URLSearchParams(location.search).get('debug')==='1') {
+        window.addEventListener('kidsfin-mini-telemetry', e=> console.log('Telemetry:', e.detail));
+      }
+    }
+
+    function startSessionTimer(){
+      clearInterval(state.timerId); state.sessionLeft = CONFIG.sessionSeconds; $('#timeLabel').textContent = state.sessionLeft;
+      state.timerId = setInterval(()=>{ state.sessionLeft--; $('#timeLabel').textContent=state.sessionLeft; if (state.sessionLeft<=0){ clearInterval(state.timerId); finishSession('time-up'); } }, 1000);
+    }
+
+    function finishSession(reason){
+      state.telemetry.endedReason = reason;
+      state.telemetry.totalXp = state.telemetry.totalStars * CONFIG.xpPerStar;
+      state.telemetry.totalCoins = state.telemetry.totalStars * CONFIG.coinsPerStar;
+
+      const prevC = parseInt(localStorage.getItem('KidsFin:walletCoins')||'0',10);
+      const prevX = parseInt(localStorage.getItem('KidsFin:walletXp')||'0',10);
+      localStorage.setItem('KidsFin:walletCoins', String(prevC + state.telemetry.totalCoins));
+      localStorage.setItem('KidsFin:walletXp', String(prevX + state.telemetry.totalXp));
+
+      try{
+        localStorage.setItem('KidsFin:telemetry:last', JSON.stringify(state.telemetry));
+        const hist = JSON.parse(localStorage.getItem('KidsFin:telemetry:history')||'[]'); hist.unshift(state.telemetry); while(hist.length>20) hist.pop();
+        localStorage.setItem('KidsFin:telemetry:history', JSON.stringify(hist));
+      }catch{}
+
+      window.dispatchEvent(new CustomEvent('kidsfin-mini-telemetry', { detail: state.telemetry }));
+
+      $('#sumStars').textContent = `${state.telemetry.totalStars} ⭐`;
+      $('#sumXp').textContent = `+${state.telemetry.totalXp}`;
+      $('#sumCoins').textContent = `+${state.telemetry.totalCoins}`;
+      $('#summaryTitle').textContent = reason==='completed' ? '¡Completaste los 10 niveles! 🎉' : '¡Tiempo agotado! ⏱️';
+      $('#overlay').classList.add('show');
+    }
+
+    // ==============================
+    // NIVELES
+    // ==============================
+    function startLevel(idx){
+      state.levelIndex = idx; state.roundIndex = 0; state.errors = 0; state.hintsUsed = 0; state.retries = 0;
+      buildRounds(); state.levelStartedAt = performance.now(); updateHUD(); setDots(); renderRound(); highlightStars(0);
+    }
+
+    function nextLevel(){
+      const next = state.levelIndex + 1; if (next>=10){ clearInterval(state.timerId); finishSession('completed'); return; }
+      startLevel(next);
+    }
+
+    function setDots(){ const dots=$$('#progress .dot'); dots.forEach((d,i)=>{ d.classList.remove('active'); if (i<state.levelIndex) d.classList.add('done'); }); dots[state.levelIndex]?.classList.add('active'); }
+    function updateHUD(){ $('#levelLabel').textContent = `${state.levelIndex+1}/10`; $('#roundLabel').textContent = `${state.roundIndex+1}/${CONFIG.roundsPerLevel[state.levelIndex]}`; }
+    function highlightStars(on){ const stars=$$('.star'); stars.forEach((s,i)=> s.classList.toggle('on', i<on)); }
+
+    function buildRounds(){
+      const n = CONFIG.roundsPerLevel[state.levelIndex];
+      const hardMode = state.levelIndex >= 5; // 6–10 ahorro con presupuesto
+      state.rounds = [];
+      for(let i=0;i<n;i++){
+        const p1 = pick(PRODUCTS); const p2 = pick(PRODUCTS.filter(x=>x.id!==p1.id));
+        let price1 = rnd(50, 500, 10); let price2 = rnd(50, 500, 10);
+        if (price1 === price2) price2 += 10;
+        const cheaper = price1 < price2 ? 0 : 1;
+        let budget = null;
+        if (hardMode){
+          // presupuesto por encima de ambas opciones para comparar ahorro
+          const maxP = Math.max(price1, price2);
+          budget = maxP + rnd(20, 200, 10);
+        }
+        state.rounds.push({
+          mode: hardMode ? 'savings' : 'cheapest',
+          a: { ...p1, price: price1 },
+          b: { ...p2, price: price2 },
+          cheaperIndex: cheaper,
+          budget,
+        });
+      }
+    }
+
+    // ==============================
+    // RONDAS
+    // ==============================
+    function renderRound(){
+      const r = state.rounds[state.roundIndex];
+      const modeBanner = $('#modeBanner');
+      const budgetBox = $('#budgetBox');
+      // Banner
+      modeBanner.textContent = r.mode==='cheapest' ? '🟦 Modo: Elige el más barato' : '🟩 Modo: ¿Cuál deja más ahorro?';
+      // Presupuesto
+      if (r.mode==='savings'){ budgetBox.style.display='inline-block'; budgetBox.textContent = 'Presupuesto: '+fmt(r.budget); } else { budgetBox.style.display='none'; }
+
+      // Cartas
+      const cards = $('#cards'); cards.innerHTML='';
+      [r.a, r.b].forEach((item, idx)=>{
+        const c = document.createElement('div'); c.className='card'; c.tabIndex=0;
+        c.innerHTML = `
+          <div class="emoji">${item.emoji}</div>
+          <div>
+            <div class="card-title">${item.name}</div>
+            <div class="price">${fmt(item.price)}</div>
+            <div class="muted">Toca para elegir</div>
+          </div>`;
+        c.addEventListener('click', ()=> submitAnswer(idx));
+        c.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); submitAnswer(idx);} });
+        cards.appendChild(c);
+      });
+    }
+
+    function submitAnswer(choiceIdx){
+      const r = state.rounds[state.roundIndex];
+      let correct = false;
+      if (r.mode==='cheapest'){
+        correct = (choiceIdx === r.cheaperIndex);
+      } else {
+        // ambos caben => el que deja más ahorro es el más barato
+        const savingsA = r.budget - r.a.price;
+        const savingsB = r.budget - r.b.price;
+        correct = (choiceIdx === (savingsA > savingsB ? 0 : 1));
+        // Nota: si hubiéramos generado un caso donde una opción no cabe, el ahorro sería negativo.
+      }
+
+      // logging nivel
+      ensureLevelTelemetry();
+      const L = state.telemetry.levels[state.levelIndex];
+      const choice = choiceIdx===0 ? 'a' : 'b';
+      L.rounds.push({
+        mode: r.mode,
+        a: { id:r.a.id, price:r.a.price },
+        b: { id:r.b.id, price:r.b.price },
+        budget: r.budget,
+        choice,
+        correct,
+      });
+
+      const allCards = $$('#cards .card');
+      allCards[choiceIdx].classList.add(correct ? 'correct' : 'wrong');
+
+      if (correct){
+        toast('¡Bien! ✔');
+        setTimeout(()=>{
+          state.roundIndex++;
+          if (state.roundIndex >= state.rounds.length){
+            onLevelComplete();
+          } else {
+            updateHUD(); renderRound();
+          }
+        }, 480);
+      } else {
+        state.errors++;
+        toast('Ups, inténtalo de nuevo');
+        setTimeout(()=>{ allCards[choiceIdx].classList.remove('wrong'); }, 450);
+      }
+    }
+
+    function ensureLevelTelemetry(){
+      if (!state.telemetry.levels[state.levelIndex]){
+        state.telemetry.levels[state.levelIndex] = {
+          level: state.levelIndex+1,
+          success:false,
+          timeMs:0,
+          hintsUsed:0,
+          retries:0,
+          errors:0,
+          stars:0,
+          rounds:[],
+        };
+      }
+    }
+
+    function useHint(){
+      state.hintsUsed++;
+      const r = state.rounds[state.roundIndex];
+      const correctIdx = r.mode==='cheapest' ? r.cheaperIndex : (r.a.price <= r.b.price ? 0 : 1);
+      const card = $$('#cards .card')[correctIdx];
+      card.classList.add('pulse'); setTimeout(()=> card.classList.remove('pulse'), 900);
+    }
+
+    function retryLevel(){ state.retries++; startLevel(state.levelIndex); }
+
+    function onLevelComplete(){
+      const elapsedSec = (performance.now() - state.levelStartedAt)/1000;
+      const timeOk = elapsedSec <= CONFIG.timeThresholds[state.levelIndex];
+      const hintOk = state.hintsUsed === 0;
+      const accuracyOk = state.errors === 0;
+      const stars = (accuracyOk?1:0) + (timeOk?1:0) + (hintOk?1:0);
+      state.telemetry.totalStars += stars;
+
+      ensureLevelTelemetry();
+      const L = state.telemetry.levels[state.levelIndex];
+      L.success = true; L.timeMs = Math.round(elapsedSec*1000); L.hintsUsed = state.hintsUsed; L.retries = state.retries; L.errors = state.errors; L.stars = stars;
+
+      highlightStars(stars);
+      toast(`Nivel ${state.levelIndex+1} listo • ${stars}★`);
+      const dots = $$('#progress .dot'); dots[state.levelIndex]?.classList.add('done');
+      setTimeout(nextLevel, 700);
+    }
+
+    // ==============================
+    // START
+    // ==============================
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
