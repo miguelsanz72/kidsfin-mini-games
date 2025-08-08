@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KidsFin • Plan de Presupuesto</title>
+  <style>
+    /*
+      KidsFin - Minijuego: Plan de Presupuesto (9–12 años)
+      Conceptos: Presupuesto, ahorro, trade-offs (costo de oportunidad), combos con descuento.
+      Mecánica: arma un plan que cumpla metas de ahorro y puntos sin pasarte del presupuesto.
+
+      Telemetría similar a otros minijuegos:
+        - localStorage: KidsFin:telemetry:last, KidsFin:telemetry:history,
+                        KidsFin:walletCoins, KidsFin:walletXp
+        - Evento: window 'kidsfin-mini-telemetry' con el objeto de sesión
+
+      ⚙️ Ajustes: ver constante CONFIG y generador de niveles makeLevels().
+    */
+
+    :root{
+      --bg:#f6f8ff; --panel:#ffffff; --ink:#0f172a; --muted:#64748b; --brand:#8b5cf6; --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444; --shadow:0 10px 26px rgba(0,0,0,.09); --radius:18px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{ margin:0; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color:var(--ink); background: radial-gradient(1200px 600px at 30% -10%, #ede9fe 0%, var(--bg) 60%); }
+    .app{ max-width:1100px; margin:0 auto; padding:16px; }
+
+    header{ display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; margin:8px 0 12px; }
+    .title{ display:flex; gap:12px; align-items:center; }
+    .icon{ width:42px; aspect-ratio:1; border-radius:12px; background:linear-gradient(145deg, #c4b5fd, #a78bfa); display:grid; place-items:center; font-size:22px; color:#fff; box-shadow:var(--shadow); }
+    h1{ margin:0; font-size: clamp(20px, 4vw, 28px); }
+    .subtitle{ color:var(--muted); font-size:14px; }
+    .badge{ background:#ede9fe; color:#4c1d95; padding:6px 10px; border-radius:999px; font-weight:800; }
+
+    .hud{ display:grid; grid-template-columns: repeat(3, auto) 1fr repeat(3, auto); gap:10px; align-items:center; background:var(--panel); border-radius: var(--radius); padding:12px; box-shadow: var(--shadow); font-size: clamp(14px, 2.2vw, 16px); }
+    .pill{ background:#eef2ff; color:#3730a3; padding:6px 10px; border-radius:999px; font-weight:800; }
+    .metric{ font-weight:900; }
+    .stars{ display:inline-flex; gap:4px; justify-self:end; }
+    .star{ width:18px; height:18px; opacity:.35; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+    .star.on{ opacity:1; }
+
+    .missions{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin:10px 0 14px; }
+    .mission{ background:#f8fafc; border:2px dashed #e5e7eb; border-radius:12px; padding:8px 10px; display:flex; align-items:center; gap:8px; font-weight:800; }
+    .mission.done{ border-color:#86efac; background:#ecfccb; }
+
+    .layout{ display:grid; grid-template-columns: 260px 1fr 300px; gap:14px; }
+
+    .panel{ background:var(--panel); border-radius: var(--radius); box-shadow:var(--shadow); padding:14px; }
+    .panel-title{ font-weight:900; color:#334155; margin-bottom:8px; }
+
+    .needs-list{ display:grid; gap:6px; }
+    .need-item{ display:flex; justify-content:space-between; align-items:center; background:#f1f5f9; border-radius:10px; padding:6px 8px; }
+
+    .store{ display:grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap:10px; align-content:start; }
+    .card{ user-select:none; cursor:pointer; background:linear-gradient(145deg, #eef2ff, #ffffff); border:3px solid #c7d2fe; border-radius:16px; box-shadow: var(--shadow); padding:10px; display:grid; grid-template-columns: 52px 1fr; gap:10px; align-items:center; transition: transform .08s ease; }
+    .card:active{ transform: scale(.98); }
+    .emoji{ font-size:36px; }
+    .name{ font-weight:900; }
+    .price{ font-weight:900; }
+    .pts{ font-weight:800; color:#065f46; }
+    .badge-xs{ display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 6px; border-radius:999px; background:#e0e7ff; color:#3730a3; font-weight:800; }
+    .selected{ outline:3px solid #22c55e; }
+
+    .basket{ display:grid; gap:8px; }
+    .row{ display:flex; justify-content:space-between; align-items:center; }
+    .basket-list{ display:grid; gap:6px; max-height:280px; overflow:auto; padding-right:4px; }
+    .chip{ display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px; background:#f1f5f9; font-weight:800; }
+    .chip button{ border:0; background:#ef4444; color:#fff; border-radius:8px; padding:4px 6px; cursor:pointer; font-weight:800; }
+
+    .totals{ background:#f8fafc; border-radius:12px; padding:8px; display:grid; gap:4px; }
+    .ok{ color:var(--ok); font-weight:900; }
+    .bad{ color:var(--bad); font-weight:900; }
+
+    .controls{ display:flex; gap:8px; justify-content:center; margin-top:8px; }
+    button{ appearance:none; border:0; background:var(--brand); color:#fff; padding:10px 14px; border-radius:999px; font-weight:900; cursor:pointer; box-shadow:var(--shadow); }
+    button.ghost{ background:#e5e7eb; color:#111827; }
+    button.secondary{ background:#111827; }
+    button[disabled]{ opacity:.6; cursor:not-allowed; }
+
+    .toast{ position:fixed; inset:auto 12px 12px 12px; display:grid; justify-items:center; pointer-events:none; }
+    .toast>div{ background:#111827; color:white; padding:8px 12px; border-radius:10px; opacity:0; transform: translateY(8px); transition: all .25s ease; font-size:14px; }
+    .toast.show>div{ opacity:1; transform: translateY(0); }
+
+    .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.48); display:none; align-items:center; justify-content:center; padding:16px; }
+    .overlay.show{ display:flex; }
+    .modal{ background:var(--panel); border-radius:20px; padding:18px; width:min(760px,96vw); box-shadow:var(--shadow); text-align:center; }
+    .big{ font-size:22px; font-weight:900; margin:0 0 6px; }
+    .summary-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:8px; margin-top:8px; }
+
+    .pulse{ animation:pulse .9s ease-in-out 1; }
+    @keyframes pulse{ 0%{ transform:scale(1);} 50%{ transform:scale(1.06);} 100%{ transform:scale(1);} }
+
+    @media (max-width:980px){ .layout{ grid-template-columns: 1fr; } .store{ grid-template-columns: repeat(2, 1fr);} }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="title">
+        <div class="icon">📊</div>
+        <div>
+          <h1>Plan de Presupuesto</h1>
+          <div class="subtitle">Arma un plan que <strong>ahorre</strong> y logre <strong>puntos</strong> sin pasarte del presupuesto. ¡Piensa, compara y decide!</div>
+        </div>
+      </div>
+      <div><span class="badge">KidsFin • 9–12</span></div>
+    </header>
+
+    <section class="hud" aria-live="polite">
+      <div class="pill">Nivel <span id="lvl">1/10</span></div>
+      <div>⏱️ <span class="metric" id="time">120</span>s</div>
+      <div>💰 Presupuesto: <span class="metric" id="budget">$—</span></div>
+      <div></div>
+      <div>🎯 Ahorro meta: <span class="metric" id="goal">$—</span></div>
+      <div>🏦 Ahorro actual: <span class="metric" id="saved">$0</span></div>
+      <div class="stars">
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.9 6.9L22 10l-5 4.9L18 22l-6-3.3L6 22l1-7.1L2 10l7.1-1.1L12 2z"/></svg>
+      </div>
+    </section>
+
+    <div class="missions">
+      <div class="mission" id="m-budget">💸 No pasarte del presupuesto</div>
+      <div class="mission" id="m-save">🏦 Ahorrar al menos <span id="mSave">$—</span></div>
+      <div class="mission" id="m-points">⭐ Lograr <span id="mPoints">—</span> puntos</div>
+    </div>
+
+    <section class="layout">
+      <aside class="panel">
+        <div class="panel-title">Gastos fijos (necesidades)</div>
+        <div class="needs-list" id="needs"></div>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0"/>
+        <div class="row"><span>Total necesidades</span><strong id="needsTotal">$0</strong></div>
+      </aside>
+
+      <main class="panel">
+        <div class="panel-title">Tienda (elige extras con puntos)</div>
+        <div class="store" id="store"></div>
+      </main>
+
+      <aside class="panel">
+        <div class="panel-title">Mi plan</div>
+        <div class="basket">
+          <div class="basket-list" id="basket"></div>
+          <div class="totals">
+            <div class="row"><span>Extras</span><strong id="extrasCost">$0</strong></div>
+            <div class="row"><span>Descuentos</span><strong id="discounts">$0</strong></div>
+            <div class="row"><span>Total gastado</span><strong id="spent">$0</strong></div>
+            <div class="row"><span>Te queda</span><strong id="left">$0</strong></div>
+            <div class="row"><span>💾 Ahorro</span><strong id="saved2">$0</strong></div>
+            <div class="row"><span>⭐ Puntos</span><strong id="points">0</strong></div>
+          </div>
+          <div class="controls">
+            <button id="hint" aria-label="Pista">¿Pista?</button>
+            <button id="reset" class="ghost">Reiniciar</button>
+            <button id="confirm" class="secondary" disabled>Confirmar plan</button>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"><div id="toastTxt"></div></div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <p class="big">¡Nivel completado!</p>
+      <div id="summaryTitle">Excelente planificación 🎉</div>
+      <div class="summary-grid">
+        <div>
+          <div class="panel-title">Estrellas</div>
+          <div style="font-size:28px;font-weight:900" id="sumStars">0 ⭐</div>
+        </div>
+        <div>
+          <div class="panel-title">XP</div>
+          <div style="font-size:28px;font-weight:900" id="sumXp">+0</div>
+        </div>
+        <div>
+          <div class="panel-title">Monedas</div>
+          <div style="font-size:28px;font-weight:900" id="sumCoins">+0</div>
+        </div>
+        <div>
+          <div class="panel-title">Comparación</div>
+          <div style="font-size:14px" id="sumOptimal">Tu plan: — / Óptimo: —</div>
+        </div>
+      </div>
+      <div class="controls" style="margin-top:10px">
+        <button id="nextBtn">Siguiente nivel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==============================
+    // CONFIGURACIÓN
+    // ==============================
+    const CONFIG = {
+      gameId: 'budget-planner',
+      currency: { symbol: '$', thousands: '.' },
+      sessionSeconds: 120,
+      xpPerStar: 12,
+      coinsPerStar: 6,
+      // umbrales de tiempo por nivel (para la ⭐ de tiempo)
+      timeThresholds: [14,16,18,20,22,24,26,28,30,32],
+      // porcentaje del óptimo para la ⭐ de estrategia
+      optimalThreshold: 0.9,
+    };
+
+    // ==============================
+    // UTILIDADES
+    // ==============================
+    const $ = (s,el=document)=> el.querySelector(s);
+    const $$ = (s,el=document)=> Array.from(el.querySelectorAll(s));
+    const fmt = (n)=> CONFIG.currency.symbol + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, CONFIG.currency.thousands);
+    const sum = (arr, fn=(x)=>x)=> arr.reduce((a,b)=> a + fn(b), 0);
+    const by = (k)=> (a,b)=> a[k]-b[k];
+    const shuffle = (arr)=> arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+
+    function toast(msg, ms=1100){ const box=$('#toast'); $('#toastTxt').textContent=msg; box.classList.add('show'); setTimeout(()=>box.classList.remove('show'), ms); }
+
+    // ==============================
+    // NIVEL DATA
+    // ==============================
+    function makeLevels(){
+      const incomes = [2000,2300,2500,2800,3200,3600,4000,4500,5000,5600];
+      const saveGoals = [400,500,600,700,800,900,1000,1100,1200,1400];
+      const targetPts = [6,7,8,9,10,11,12,13,14,15];
+      const needsBase = [
+        { id:'bus', name:'Transporte', emoji:'🚌', cost:300 },
+        { id:'colacion', name:'Colación', emoji:'🥪', cost:200 },
+        { id:'utiles', name:'Útiles', emoji:'✏️', cost:250 },
+      ];
+      const storeBase = [
+        { id:'libro', name:'Libro', emoji:'📗', price:350, pts:3, group:'lectura' },
+        { id:'comic', name:'Cómic', emoji:'🦸', price:250, pts:2, group:'lectura' },
+        { id:'puzzle', name:'Rompecabezas', emoji:'🧩', price:300, pts:3, group:'juego' },
+        { id:'balon', name:'Balón', emoji:'⚽', price:280, pts:2, group:'deporte' },
+        { id:'app', name:'App educativa', emoji:'📱', price:200, pts:2, group:'digital' },
+        { id:'cine', name:'Cine', emoji:'🎬', price:320, pts:2, group:'salida' },
+        { id:'helado', name:'Helado', emoji:'🍦', price:120, pts:1, group:'snack' },
+        { id:'galletas', name:'Galletas', emoji:'🍪', price:140, pts:1, group:'snack' },
+        { id:'audifonos', name:'Audífonos', emoji:'🎧', price:500, pts:4, group:'digital' },
+        { id:'lego', name:'Bloques', emoji:'🧱', price:450, pts:4, group:'juego' },
+      ];
+      const deals = [ { group:'snack', pct:0.2 }, { group:'lectura', pct:0.15 } ];
+
+      // Genera 10 niveles incrementando variedad y precios levemente
+      const levels = [];
+      for(let i=0;i<10;i++){
+        const needs = needsBase.map(n=> ({...n, cost: n.cost + (i%3===0?0: (i%3===1?20:40)) }));
+        let store = storeBase.map(s=> ({...s, price: s.price + (i*10)}));
+        // Añade variedad extra en niveles altos
+        if (i>=5){
+          store = store.concat([
+            { id:`libreta${i}`, name:'Libreta diseño', emoji:'📒', price:220 + i*8, pts:2, group:'lectura' },
+            { id:`patin${i}`, name:'Patineta básica', emoji:'🛹', price:520 + i*12, pts:5, group:'deporte' },
+          ]);
+        }
+        // limitar tamaño y mezclar
+        store = shuffle(store).slice(0, 10 + Math.min(2, i-4));
+        levels.push({
+          income: incomes[i],
+          saveGoal: saveGoals[i],
+          targetPoints: targetPts[i],
+          needs,
+          store,
+          deals,
+        });
+      }
+      return levels;
+    }
+
+    const LEVELS = makeLevels();
+
+    // ==============================
+    // ESTADO
+    // ==============================
+    const state = {
+      levelIndex: 0,
+      picked: new Set(),
+      sessionLeft: CONFIG.sessionSeconds,
+      timerId: null,
+      levelStartedAt: 0,
+      hintsUsed: 0,
+      retries: 0,
+      telemetry: {
+        gameId: CONFIG.gameId,
+        sessionStartAtISO: new Date().toISOString(),
+        levels: [],
+        totalStars: 0,
+        totalXp: 0,
+        totalCoins: 0,
+        endedReason: null,
+      },
+    };
+
+    // ==============================
+    // RENDER
+    // ==============================
+    function renderLevel(){
+      const L = LEVELS[state.levelIndex];
+      $('#lvl').textContent = `${state.levelIndex+1}/10`;
+      $('#budget').textContent = fmt(L.income);
+      $('#goal').textContent = fmt(L.saveGoal);
+      $('#mSave').textContent = fmt(L.saveGoal);
+      $('#mPoints').textContent = L.targetPoints;
+
+      // needs
+      const needsEl = $('#needs'); needsEl.innerHTML='';
+      L.needs.forEach(n=>{
+        const row = document.createElement('div'); row.className='need-item';
+        row.innerHTML = `<span>${n.emoji} ${n.name}</span><strong>${fmt(n.cost)}</strong>`;
+        needsEl.appendChild(row);
+      });
+      $('#needsTotal').textContent = fmt(sum(L.needs, x=>x.cost));
+
+      // store
+      const storeEl = $('#store'); storeEl.innerHTML='';
+      L.store.forEach(it=>{
+        const c = document.createElement('div'); c.className='card'; c.dataset.id = it.id;
+        c.innerHTML = `
+          <div class="emoji">${it.emoji}</div>
+          <div>
+            <div class="name">${it.name}</div>
+            <div class="price">${fmt(it.price)}</div>
+            <div class="row" style="gap:6px;margin-top:4px">
+              <span class="pts">⭐ ${it.pts}</span>
+              ${it.group? `<span class="badge-xs">Combo ${it.group}</span>`:''}
+            </div>
+          </div>`;
+        c.addEventListener('click', ()=> togglePick(it.id));
+        storeEl.appendChild(c);
+      });
+
+      updateTotals();
+    }
+
+    function renderBasket(){
+      const L = LEVELS[state.levelIndex];
+      const wrap = $('#basket'); wrap.innerHTML='';
+      const items = L.store.filter(it=> state.picked.has(it.id));
+      items.forEach(it=>{
+        const chip = document.createElement('div'); chip.className='chip';
+        chip.innerHTML = `${it.emoji} <strong>${it.name}</strong> ${fmt(it.price)} • ⭐${it.pts} <button aria-label="Quitar">×</button>`;
+        chip.querySelector('button').addEventListener('click', ()=> togglePick(it.id));
+        wrap.appendChild(chip);
+      });
+    }
+
+    function updateSelectionsUI(){
+      const cards = $$('#store .card');
+      cards.forEach(c=> c.classList.toggle('selected', state.picked.has(c.dataset.id)));
+    }
+
+    function updateTotals(){
+      const L = LEVELS[state.levelIndex];
+      const needsCost = sum(L.needs, x=>x.cost);
+      const items = L.store.filter(it=> state.picked.has(it.id));
+      const extras = sum(items, x=>x.price);
+      const discount = calcDiscount(items, L.deals);
+      const spent = needsCost + (extras - discount);
+      const left = L.income - spent;
+      const saved = Math.max(0, left);
+      const points = sum(items, x=>x.pts);
+
+      $('#extrasCost').textContent = fmt(extras);
+      $('#discounts').textContent = '-' + fmt(discount);
+      $('#spent').textContent = fmt(spent);
+      $('#left').textContent = fmt(left);
+      $('#saved').textContent = fmt(saved);
+      $('#saved2').textContent = fmt(saved);
+      $('#points').textContent = points;
+
+      // misiones
+      const okBudget = spent <= L.income;
+      const okSave = saved >= L.saveGoal;
+      const okPoints = points >= L.targetPoints;
+      setMission('#m-budget', okBudget);
+      setMission('#m-save', okSave);
+      setMission('#m-points', okPoints);
+
+      // botón confirmar
+      $('#confirm').disabled = !(okBudget && okSave && okPoints);
+
+      renderBasket();
+      updateSelectionsUI();
+    }
+
+    function setMission(sel, done){
+      const el = $(sel);
+      el.classList.toggle('done', !!done);
+    }
+
+    function togglePick(id){
+      if (state.picked.has(id)) state.picked.delete(id); else state.picked.add(id);
+      updateTotals();
+    }
+
+    function calcDiscount(items, deals){
+      let discount = 0;
+      for(const d of deals){
+        const groupItems = items.filter(x=> x.group===d.group).sort(by('price'));
+        if (groupItems.length >= 2){
+          // una promo simple: 20% al más barato si eliges 2+ del grupo
+          const cheapest = groupItems[0];
+          discount += Math.round(cheapest.price * d.pct);
+        }
+      }
+      return discount;
+    }
+
+    // ==============================
+    // ÓPTIMO (para ⭐ de estrategia)
+    // ==============================
+    function computeOptimal(){
+      const L = LEVELS[state.levelIndex];
+      const needsCost = sum(L.needs, x=>x.cost);
+      const S = L.store;
+      const n = S.length; let bestPts = -1; let bestMask = 0; let bestSpent = 0; let bestSaved=0;
+      const maxMask = (1<<n);
+      for(let mask=0; mask<maxMask; mask++){
+        let pick = [];
+        for(let i=0;i<n;i++) if (mask & (1<<i)) pick.push(S[i]);
+        const extras = sum(pick, x=>x.price);
+        const discount = calcDiscount(pick, L.deals);
+        const spent = needsCost + (extras - discount);
+        const left = L.income - spent; const saved = Math.max(0, left);
+        const pts = sum(pick, x=>x.pts);
+        if (spent <= L.income && saved >= L.saveGoal && pts >= L.targetPoints){
+          if (pts > bestPts){ bestPts = pts; bestMask = mask; bestSpent = spent; bestSaved=saved; }
+        }
+      }
+      return { points: Math.max(0,bestPts), mask: bestMask, spent: bestSpent, saved: bestSaved };
+    }
+
+    // ==============================
+    // SESIÓN / NIVELES
+    // ==============================
+    function startSession(){
+      clearInterval(state.timerId);
+      state.sessionLeft = CONFIG.sessionSeconds; $('#time').textContent = state.sessionLeft;
+      state.timerId = setInterval(()=>{
+        state.sessionLeft--; $('#time').textContent = state.sessionLeft;
+        if (state.sessionLeft<=0){ clearInterval(state.timerId); endSession('time-up'); }
+      },1000);
+    }
+
+    function startLevel(idx){
+      state.levelIndex = idx; state.picked = new Set(); state.hintsUsed = 0; state.retries = 0;
+      state.levelStartedAt = performance.now(); highlightStars(0);
+      renderLevel();
+    }
+
+    function nextLevel(){
+      const next = state.levelIndex + 1;
+      if (next >= LEVELS.length){ endSession('completed'); return; }
+      startLevel(next);
+    }
+
+    function endSession(reason){
+      // totales de la sesión
+      state.telemetry.endedReason = reason;
+      state.telemetry.totalXp = state.telemetry.totalStars * CONFIG.xpPerStar;
+      state.telemetry.totalCoins = state.telemetry.totalStars * CONFIG.coinsPerStar;
+      const prevC = parseInt(localStorage.getItem('KidsFin:walletCoins')||'0',10);
+      const prevX = parseInt(localStorage.getItem('KidsFin:walletXp')||'0',10);
+      localStorage.setItem('KidsFin:walletCoins', String(prevC + state.telemetry.totalCoins));
+      localStorage.setItem('KidsFin:walletXp', String(prevX + state.telemetry.totalXp));
+      try{
+        localStorage.setItem('KidsFin:telemetry:last', JSON.stringify(state.telemetry));
+        const hist = JSON.parse(localStorage.getItem('KidsFin:telemetry:history')||'[]'); hist.unshift(state.telemetry); while(hist.length>20) hist.pop();
+        localStorage.setItem('KidsFin:telemetry:history', JSON.stringify(hist));
+      }catch{}
+      window.dispatchEvent(new CustomEvent('kidsfin-mini-telemetry', { detail: state.telemetry }));
+      // resumen final
+      $('#summaryTitle').textContent = reason==='completed' ? '¡Completaste los 10 niveles! 🎉' : '¡Tiempo agotado! ⏱️';
+      $('#sumStars').textContent = `${state.telemetry.totalStars} ⭐`;
+      $('#sumXp').textContent = `+${state.telemetry.totalXp}`;
+      $('#sumCoins').textContent = `+${state.telemetry.totalCoins}`;
+      $('#sumOptimal').textContent = '—';
+      $('#nextBtn').textContent = 'Jugar de nuevo';
+      $('#overlay').classList.add('show');
+      $('#nextBtn').onclick = ()=> location.reload();
+    }
+
+    function levelSuccess(){
+      const L = LEVELS[state.levelIndex];
+      const elapsedSec = (performance.now() - state.levelStartedAt)/1000;
+      const timeOk = elapsedSec <= CONFIG.timeThresholds[state.levelIndex];
+
+      // calcula estrategia
+      const currentPts = parseInt($('#points').textContent,10);
+      const opt = computeOptimal();
+      const nearOpt = opt.points>0 ? currentPts >= Math.ceil(opt.points * CONFIG.optimalThreshold) : currentPts>0;
+
+      // estrellas: (1) completar misiones, (2) tiempo, (3) >=90% del óptimo
+      let stars = 1 + (timeOk?1:0) + (nearOpt?1:0);
+      highlightStars(stars);
+
+      state.telemetry.totalStars += stars;
+      ensureLevelTelemetry();
+      const T = state.telemetry.levels[state.levelIndex];
+      T.success = true; T.timeMs = Math.round(elapsedSec*1000); T.hintsUsed = state.hintsUsed; T.retries = state.retries; T.stars = stars;
+      T.selected = Array.from(state.picked);
+      T.points = currentPts; T.optimalPoints = opt.points; T.nearOptimal = nearOpt; T.optimalSpent = opt.spent; T.optimalSaved = opt.saved;
+
+      $('#sumStars').textContent = `${stars} ⭐`;
+      $('#sumXp').textContent = `+${stars*CONFIG.xpPerStar}`;
+      $('#sumCoins').textContent = `+${stars*CONFIG.coinsPerStar}`;
+      $('#sumOptimal').textContent = `Tu plan: ${currentPts} pts / Óptimo: ${opt.points} pts`;
+
+      toast(`¡Plan listo! ${stars}★`);
+      $('#overlay').classList.add('show');
+      $('#nextBtn').textContent = 'Siguiente nivel';
+      $('#nextBtn').onclick = ()=>{ $('#overlay').classList.remove('show'); nextLevel(); };
+    }
+
+    function ensureLevelTelemetry(){
+      if (!state.telemetry.levels[state.levelIndex]){
+        state.telemetry.levels[state.levelIndex] = {
+          level: state.levelIndex+1,
+          success:false,
+          timeMs:0,
+          hintsUsed:0,
+          retries:0,
+          stars:0,
+          selected:[],
+          points:0,
+          optimalPoints:0,
+          nearOptimal:false,
+          optimalSpent:0,
+          optimalSaved:0,
+        };
+      }
+    }
+
+    // ==============================
+    // INTERACCIÓN
+    // ==============================
+    function hint(){
+      state.hintsUsed++;
+      const L = LEVELS[state.levelIndex];
+      // Elige el mejor ratio pts/precio que mantenga la posibilidad de completar misiones
+      const candidates = L.store.filter(it=> !state.picked.has(it.id));
+      let best = null; let bestScore = -Infinity;
+      for(const it of candidates){
+        state.picked.add(it.id);
+        const feas = isFeasible();
+        const score = it.pts / it.price;
+        state.picked.delete(it.id);
+        if (feas && score > bestScore){ best = it; bestScore = score; }
+      }
+      if (best){
+        // resalta
+        const el = $(`#store .card[data-id="${best.id}"]`); el.classList.add('pulse'); setTimeout(()=> el.classList.remove('pulse'), 900);
+      }
+    }
+
+    function isFeasible(){
+      // Chequea si con la selección actual aún es posible cumplir las misiones (no necesariamente ya)
+      const L = LEVELS[state.levelIndex];
+      const needsCost = sum(L.needs, x=>x.cost);
+      const items = L.store.filter(it=> state.picked.has(it.id));
+      const extras = sum(items, x=>x.price);
+      const discount = calcDiscount(items, L.deals);
+      const spent = needsCost + (extras - discount);
+      const left = L.income - spent; const saved = Math.max(0, left);
+      const points = sum(items, x=>x.pts);
+      return spent <= L.income && saved >= 0 && points <= 50; // condición laxa para sugerencia
+    }
+
+    // ==============================
+    // BOOT
+    // ==============================
+    function init(){
+      $('#hint').addEventListener('click', hint);
+      $('#reset').addEventListener('click', ()=>{ state.picked = new Set(); updateTotals(); });
+      $('#confirm').addEventListener('click', levelSuccess);
+
+      startSession();
+      startLevel(0);
+
+      if (new URLSearchParams(location.search).get('debug')==='1') {
+        window.addEventListener('kidsfin-mini-telemetry', e=> console.log('Telemetry:', e.detail));
+      }
+    }
+
+    function highlightStars(on){ const stars=$$('.star'); stars.forEach((s,i)=> s.classList.toggle('on', i<on)); }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
