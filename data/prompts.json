@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "original_prompt": "Un gato jugando en el jardín",
+    "optimized_prompt": "Un adorable gato doméstico de pelaje atigrado jugando alegremente en un exuberante jardín lleno de flores coloridas, con luz natural suave y cálida que crea una atmósfera mágica y serena",
+    "improvements": "[\"Añadida descripción específica del gato\", \"Mejorada la descripción del entorno\", \"Añadida información de iluminación\"]",
+    "confidence_score": 0.92,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-15T21:58:36.219Z"
+  },
+  {
+    "id": 2,
+    "original_prompt": "Paisaje de montaña",
+    "optimized_prompt": "Majestuoso paisaje montañoso con picos nevados que se elevan hacia un cielo azul cristalino, praderas verdes en primer plano salpicadas de flores silvestres, y una cascada que desciende graciosamente por las rocas, capturado durante la hora dorada",
+    "improvements": "[\"Añadidos detalles específicos de los picos\", \"Mejorada la descripción del primer plano\", \"Añadido elemento de cascada\", \"Especificada la hora del día\"]",
+    "confidence_score": 0.89,
+    "target_style": "landscape",
+    "duration": 15,
+    "created_at": "2025-08-15T21:58:36.220Z"
+  },
+  {
+    "id": 3,
+    "original_prompt": "Un niño diciendo Kidsfon me sacara de la pobreza",
+    "optimized_prompt": "Un niño diciendo Kidsfon me sacara de la pobreza, filmado en estilo cinematic, alta calidad, 4K, con movimientos suaves de cámara",
+    "improvements": "[\"Agregado estilo cinematic\",\"Agregada especificación de calidad técnica\",\"Agregado movimiento de cámara\"]",
+    "confidence_score": 0.6,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-15T22:21:03.943Z"
+  },
+  {
+    "id": 4,
+    "original_prompt": "Un niño diciendo Kidsfin me sacara de la probreza",
+    "optimized_prompt": "Un niño diciendo Kidsfin me sacara de la probreza, filmado en estilo cinematic, alta calidad, 4K, con movimientos suaves de cámara",
+    "improvements": "[\"Agregado estilo cinematic\",\"Agregada especificación de calidad técnica\",\"Agregado movimiento de cámara\"]",
+    "confidence_score": 0.6,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-15T22:29:10.713Z"
+  }
+]
