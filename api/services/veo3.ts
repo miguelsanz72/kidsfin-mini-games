@@ -265,8 +265,8 @@ async function pollOperationStatus(operationName: string, jobId: string): Promis
   
   while (attempts < maxAttempts) {
     try {
-      const operation = await genAI.operations.getVideosOperation({
-        operation: { name: operationName }
+      const operation = await genAI.operations.get({
+        name: operationName
       });
       
       // Actualizar progreso del job
@@ -280,7 +280,7 @@ async function pollOperationStatus(operationName: string, jobId: string): Promis
           name: operation.name,
           done: operation.done,
           response: operation.response ? {
-            generatedVideo: operation.response.generatedVideos?.[0]?.video
+            generatedVideo: operation.response.generatedVideos?.[0]?.video?.uri
           } : undefined,
           error: operation.error
         };
@@ -447,11 +447,15 @@ export async function testGoogleAIConnection(): Promise<boolean> {
       return false;
     }
     
-    // Intentar listar modelos disponibles
-    const models = await genAI.models.list();
-    const veoModel = models.find(model => model.name?.includes('veo'));
-    
-    return !!veoModel;
+    // Intentar verificar si el modelo Veo está disponible
+    try {
+      const model = await genAI.models.get({
+        model: VEO_MODEL
+      });
+      return !!model;
+    } catch (error) {
+      return false;
+    }
   } catch (error) {
     console.error('Error testing Google AI connection:', error);
     return false;
