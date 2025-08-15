@@ -193,8 +193,53 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// GET /api/videos/test-config - Verificar configuración de Google AI
+router.get('/test-config', async (req, res) => {
+    try {
+        const isConfigured = isGoogleAIConfigured();
+        const config: any = {
+            googleAIConfigured: isConfigured,
+            projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+            location: process.env.GOOGLE_CLOUD_LOCATION,
+            apiKeySet: !!process.env.GOOGLE_API_KEY,
+            timestamp: new Date().toISOString()
+        };
+        
+        if (isConfigured) {
+            try {
+                const testResult = await import('../services/veo3.js').then(module => 
+                    module.testGoogleAIConnection()
+                );
+                config.connectionTest = testResult;
+            } catch (error: any) {
+                config.connectionTest = false;
+                config.error = error.message;
+            }
+        }
+        
+        res.json(config);
+    } catch (error) {
+        console.error('Error verificando configuración:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Definición del tipo Video para la base de datos
+interface Video {
+  id: number;
+  prompt_id: number | null;
+  veo_job_id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  duration_seconds: number;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  metadata: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 // Función auxiliar para calcular progreso basado en estado
-function getProgressFromStatus(status: Video['status']): number {
+function getProgressFromStatus(status: string): number {
     switch (status) {
         case 'queued': return 0;
         case 'processing': return 50;

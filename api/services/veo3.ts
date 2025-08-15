@@ -2,7 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { v4 as uuidv4 } from 'uuid';
+import { GoogleGenAI } from '@google/genai';
+
+// Generador de ID simple ya que uuid no está disponible
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
 
 const execAsync = promisify(exec);
 
@@ -11,7 +16,8 @@ export interface GenerateVideoRequest {
   prompt: string;
   aspectRatio?: '16:9' | '9:16' | '1:1';
   durationSeconds?: number;
-  resolution?: '720' | '1080';
+  duration?: number;
+  resolution?: '720' | '1080' | '4k';
   generateAudio?: boolean;
   enhancePrompt?: boolean;
   negativePrompt?: string;
@@ -22,11 +28,12 @@ export interface GenerateVideoRequest {
   };
   sampleCount?: number;
   seed?: number;
+  style?: string;
 }
 
 export interface VideoJob {
   id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'failed';
   prompt: string;
   operationName?: string; // Para tracking de la operación en Google
   videoUrl?: string;
@@ -38,6 +45,7 @@ export interface VideoJob {
   duration: number;
   aspectRatio: string;
   style?: string;
+  estimatedTime?: number;
 }
 
 export interface GenerateVideoResponse {
@@ -63,10 +71,29 @@ interface GoogleVeoOperation {
 const videoJobs = new Map<string, VideoJob>();
 
 // Configuración de la API de Google Vertex AI para Veo 3
-const VERTEX_AI_ENDPOINT = 'https://us-central1-aiplatform.googleapis.com/v1';
-const VEO_MODEL = 'veo-3.0-generate-preview';
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'your-project-id';
-const LOCATION = 'us-central1';
+const VEO_MODEL = 'veo-2.0-generate-001'; // Modelo actual de Veo disponible
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'kidsfin-mini-juegos';
+const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+
+let genAI: GoogleGenAI | null = null;
+
+function getGenAI(): GoogleGenAI | null {
+  if (!process.env.GOOGLE_API_KEY) return null;
+  if (!genAI) {
+    try {
+      genAI = new GoogleGenAI({
+        vertexai: true,
+        project: PROJECT_ID,
+        location: LOCATION,
+        apiKey: process.env.GOOGLE_API_KEY,
+      });
+    } catch (e) {
+      console.error('Error inicializando Google Gen AI:', e);
+      return null;
+    }
+  }
+  return genAI;
+}
 
 // Función para generar un ID único para el trabajo
 function generateJobId(): string {
@@ -79,7 +106,7 @@ export async function generateVideo(request: GenerateVideoRequest): Promise<Gene
   
   const job: VideoJob = {
     id: jobId,
-    status: 'pending',
+    status: 'queued',
     prompt: request.prompt,
     createdAt: new Date(),
     progress: 0,
@@ -102,7 +129,7 @@ export async function generateVideo(request: GenerateVideoRequest): Promise<Gene
   
   return {
     jobId,
-    status: 'pending',
+    status: 'queued',
     estimatedTime: (request.durationSeconds || 5) * 30 // Estimación: 30 segundos por segundo de video
   };
 }
@@ -194,81 +221,53 @@ function mapResolution(resolution: string): string {
   return resolutionMap[resolution] || '720';
 }
 
-// Función para iniciar la generación de video con la API de Google Veo 3
-async function startVideoGeneration(request: GenerateVideoRequest): Promise<{ name: string }> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error('Google API Key no configurada');
+// Función para iniciar la generación de video con Google Gen AI SDK
+async function startVideoGeneration(request: { contents: { parts: { text: string }[] }[], generationConfig: any }): Promise<{ name: string }> {
+  const genAI = getGenAI();
+  if (!genAI) {
+    throw new Error('Google Gen AI no configurada');
   }
   
   try {
-    const url = `${VERTEX_AI_ENDPOINT}/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${VEO_MODEL}:generateContent`;
+    const prompt = request.contents[0]?.parts[0]?.text || '';
     
-    // Construir el payload según la documentación oficial
-    const payload = {
-      contents: [{
-        role: 'user',
-        parts: [{
-          text: request.prompt
-        }]
-      }],
-      generationConfig: {
-        aspectRatio: request.aspectRatio || '16:9',
-        durationSeconds: request.durationSeconds || 5,
-        resolution: mapResolution(request.resolution || '720'),
-        generateAudio: request.generateAudio || false,
-        enhancePrompt: request.enhancePrompt || true,
-        sampleCount: request.sampleCount || 1,
-        ...(request.negativePrompt && { negativePrompt: request.negativePrompt }),
-        ...(request.seed && { seed: request.seed })
-      },
-      ...(request.image && { image: request.image })
+    const config = {
+      numberOfVideos: 1,
+      aspectRatio: request.generationConfig.aspectRatio || '16:9',
+      durationSeconds: request.generationConfig.durationSeconds || 5,
+      generateAudio: request.generationConfig.generateAudio || false,
+      enhancePrompt: true,
+      personGeneration: 'allow_all',
     };
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload)
+
+    const operation = await genAI.models.generateVideos({
+      model: VEO_MODEL,
+      prompt: prompt,
+      config: config
     });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-    }
-    
-    const data = await response.json();
-    return { name: data.name || `operation-${Date.now()}` };
+
+    return { name: operation.name || `operation-${Date.now()}` };
   } catch (error) {
     console.error('Error starting video generation:', error);
     throw error;
   }
 }
 
-// Función para hacer polling del estado de la operación
+// Función para hacer polling del estado de la operación con Google Gen AI SDK
 async function pollOperationStatus(operationName: string, jobId: string): Promise<GoogleVeoOperation> {
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const genAI = getGenAI();
+  if (!genAI) {
+    throw new Error('Google Gen AI no configurada');
+  }
+
   const maxAttempts = 120; // 10 minutos máximo (5 segundos * 120)
   let attempts = 0;
   
   while (attempts < maxAttempts) {
     try {
-      const url = `${VERTEX_AI_ENDPOINT}/projects/${PROJECT_ID}/locations/${LOCATION}/operations/${operationName}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
+      const operation = await genAI.operations.getVideosOperation({
+        operation: { name: operationName }
       });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to check operation status: ${response.status}`);
-      }
-      
-      const operation: GoogleVeoOperation = await response.json();
       
       // Actualizar progreso del job
       const job = videoJobs.get(jobId);
@@ -277,7 +276,14 @@ async function pollOperationStatus(operationName: string, jobId: string): Promis
       }
       
       if (operation.done) {
-        return operation;
+        return {
+          name: operation.name,
+          done: operation.done,
+          response: operation.response ? {
+            generatedVideo: operation.response.generatedVideos?.[0]?.video
+          } : undefined,
+          error: operation.error
+        };
       }
       
       // Esperar 5 segundos antes del siguiente intento
@@ -430,26 +436,22 @@ export function cleanupOldJobs(maxAgeHours: number = 24): number {
 
 // Función para verificar si Google AI está configurado
 export function isGoogleAIConfigured(): boolean {
-  return !!process.env.GOOGLE_API_KEY;
+  return !!process.env.GOOGLE_API_KEY && !!process.env.GOOGLE_CLOUD_PROJECT_ID;
 }
 
 // Función para verificar la configuración de Google AI
 export async function testGoogleAIConnection(): Promise<boolean> {
   try {
-    if (!process.env.GOOGLE_API_KEY) {
+    const genAI = getGenAI();
+    if (!genAI) {
       return false;
     }
     
-    // Probar la conexión con la API de Vertex AI
-    const url = `${VERTEX_AI_ENDPOINT}/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models`;
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${process.env.GOOGLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    // Intentar listar modelos disponibles
+    const models = await genAI.models.list();
+    const veoModel = models.find(model => model.name?.includes('veo'));
     
-    return response.ok;
+    return !!veoModel;
   } catch (error) {
     console.error('Error testing Google AI connection:', error);
     return false;

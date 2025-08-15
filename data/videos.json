@@ -58,5 +58,17 @@
     "metadata": "{\"aspectRatio\":\"16:9\",\"style\":\"realistic\",\"originalPrompt\":\"Un niño diciendo Kidsfin me sacara de la probreza, filmado en estilo cinematic, alta calidad, 4K, con movimientos suaves de cámara\"}",
     "created_at": "2025-08-15T22:29:15.459Z",
     "completed_at": "2025-08-15T22:29:21.538Z"
+  },
+  {
+    "id": 6,
+    "prompt_id": null,
+    "veo_job_id": "veo3_1755298689059_k7amfxfed",
+    "status": "completed",
+    "video_url": "/uploads/videos/veo3_1755298689059_k7amfxfed.mp4",
+    "thumbnail_url": "2025-08-15T22:58:09.878Z",
+    "duration_seconds": 10,
+    "metadata": "{\"aspectRatio\":\"16:9\",\"style\":\"realistic\",\"originalPrompt\":\"Un niño gritando que kidsfin los sacara de la probreza, filmado en estilo cinematic, alta calidad, 4K, con movimientos suaves de cámara\"}",
+    "created_at": "2025-08-15T22:58:09.082Z",
+    "completed_at": "2025-08-15T22:58:12.205Z"
   }
 ]
