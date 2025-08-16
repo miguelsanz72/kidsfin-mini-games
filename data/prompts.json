@@ -48,5 +48,145 @@
     "target_style": "cinematic",
     "duration": 10,
     "created_at": "2025-08-15T22:58:06.674Z"
+  },
+  {
+    "id": 6,
+    "original_prompt": "Un pinguino emperador hablando ",
+    "optimized_prompt": "Un pinguino emperador hablando , filmado en estilo cinematic, alta calidad, 4K, con movimientos suaves de cámara",
+    "improvements": "[\"Agregado estilo cinematic\",\"Agregada especificación de calidad técnica\",\"Agregado movimiento de cámara\"]",
+    "confidence_score": 0.6,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:06:56.764Z"
+  },
+  {
+    "id": 7,
+    "original_prompt": "El patito juan cantando",
+    "optimized_prompt": "El patito juan cantando, filmado en estilo cinematic, alta calidad, 4K, con movimientos suaves de cámara",
+    "improvements": "[\"Agregado estilo cinematic\",\"Agregada especificación de calidad técnica\",\"Agregado movimiento de cámara\"]",
+    "confidence_score": 0.6,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:13:17.008Z"
+  },
+  {
+    "id": 8,
+    "original_prompt": "Un pinguino cantando",
+    "optimized_prompt": "Un pingüino emperador en un escenario nevado y gélido, iluminado por una suave luz azulada. La cámara se acerca lentamente al pingüino mientras este abre el pico y comienza a cantar una melodía melancólica y cautivadora, su canto ecoando a través del paisaje helado. La composición enfoca al pingüino de forma central, resaltando su elegante silueta y movimientos gráciles. La calidad de imagen es nítida y cinematográfica, con un enfoque suave y una profundidad de campo que enmarca al pingüino de forma artística.",
+    "improvements": "[\"Añadido detalles visuales específicos como el escenario nevado, la iluminación azulada y la calidad cinematográfica de la imagen.\",\"Incluido movimiento de cámara acercándose al pingüino mientras canta.\",\"Especificado el tipo de pingüino (emperador) y la atmósfera melancólica de su canto.\",\"Optimizado la composición y el encuadre para resaltar al pingüino de forma central y elegante.\",\"Mejorada la calidad técnica con términos como 'nítida', 'cinematográfica' y 'enfoque suave'.\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:19:39.764Z"
+  },
+  {
+    "id": 9,
+    "original_prompt": "un pinguino cantando",
+    "optimized_prompt": "Un elegante pingüino de pie en un paisaje nevado, con un fondo de montañas azuladas. La cámara se acerca lentamente mientras el pingüino abre el pico y comienza a cantar con gracia, su voz resonando a través del entorno tranquilo y sereno. La iluminación es suave y cálida, creando una atmósfera cinematográfica y evocadora. El encuadre se centra en el pingüino, capturando sus movimientos fluidos y su expresión solemne mientras continúa su melodía durante 10 segundos.",
+    "improvements": "[\"Describir elementos visuales específicos y detallados (pingüino, paisaje nevado, montañas, iluminación suave y cálida)\",\"Incluir movimiento de cámara (acercamiento lento) y acción (pingüino cantando)\",\"Adaptar el prompt al estilo cinematográfico solicitado\",\"Optimizar la duración del video a 10 segundos\",\"Describir la composición visual (encuadre centrado en el pingüino)\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:27:24.907Z"
+  },
+  {
+    "id": 10,
+    "original_prompt": "un niño gritando \"Kidsfin me sacara de la pobreza\"",
+    "optimized_prompt": "Un joven de 10 años, con una mirada determinada y esperanzada, grita enérgicamente: \"¡Kidsfin me sacará de la pobreza!\" La cámara se acerca lentamente a su rostro, capturando la intensidad de su expresión. La iluminación cálida y dramática crea una atmósfera de determinación y aspiración. El encuadre se centra en el niño, destacando su resolución mientras se mueve con confianza, dando la sensación de que su futuro está a punto de cambiar.",
+    "improvements": "[\"Claridad visual: Se describen detalles específicos del niño y su expresión\",\"Movimiento: Se incluye una descripción del movimiento de cámara y la acción del niño\",\"Iluminación: Se especifica el tipo de iluminación y atmósfera\",\"Estilo: Se adapta el prompt al estilo cinematográfico solicitado\",\"Duración: Se optimiza la descripción para un video de 10 segundos\",\"Composición: Se describe el encuadre y la composición visual\",\"Calidad técnica: Se incluyen términos que mejoran la calidad técnica del video\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:43:36.462Z"
+  },
+  {
+    "id": 11,
+    "original_prompt": "niña comiendo helado",
+    "optimized_prompt": "Una niña de 8 años disfruta de un delicioso helado de vainilla en un día soleado. La cámara se acerca lentamente a su rostro mientras saborea el helado, con una sonrisa radiante iluminada por la cálida luz dorada del atardecer. El encuadre es un plano medio que captura su expresión de placer y la textura suave del helado derritiéndose en su boca. La profundidad de campo desenfocada crea una atmósfera cinemática y evocadora.",
+    "improvements": "[\"Agrega detalles visuales específicos como la edad de la niña, el sabor del helado y la iluminación cálida del atardecer\",\"Describe el movimiento de cámara de acercamiento para crear un momento íntimo y emocional\",\"Especifica el encuadre de plano medio para enfocar en la expresión y textura del helado\",\"Utiliza términos cinematográficos como 'profundidad de campo desenfocada' para lograr una estética cinemática\",\"Optimiza la duración a 10 segundos para crear un clip conciso y cautivador\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:53:21.123Z"
+  },
+  {
+    "id": 12,
+    "original_prompt": "niña comiendo helado",
+    "optimized_prompt": "Una joven de cabello castaño, vestida con un vestido blanco, se sienta en un banco de madera en un parque soleado. Con una expresión de deleite, lleva lentamente una cucharada de helado de vainilla a su boca, mientras una suave brisa agita su cabello. La cámara se acerca lentamente, capturando el momento íntimo y tranquilo.",
+    "improvements": "[\"Describo a la niña con más detalles físicos (cabello, vestido, expresión) para lograr mayor claridad visual\",\"Incluyo detalles sobre el entorno (parque soleado, banco de madera) para crear una escena más contextualizada\",\"Agrego descripciones de movimiento (cámara acercándose, brisa) para generar más dinamismo\",\"Utilizo un lenguaje más cinematográfico y evocativo (momento íntimo y tranquilo) para lograr el estilo deseado\",\"Optimizo la duración del prompt para un video de 10 segundos\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T01:54:41.186Z"
+  },
+  {
+    "id": 13,
+    "original_prompt": "jugando futbol",
+    "optimized_prompt": "Una cámara en movimiento sigue a dos jugadores de fútbol mientras corren por un campo verde y bien iluminado. Los jugadores se mueven con gracia y determinación, intercambiando pases rápidos y precisos. La escena está bañada en una cálida luz dorada que crea una atmósfera cinemática y emocionante. La composición enfoca a los jugadores en primer plano, resaltando sus movimientos fluidos y la tensión del juego.",
+    "improvements": "[\"Añadida descripción de movimiento de cámara para crear un efecto cinemático\",\"Detalles sobre la iluminación y atmósfera para mejorar la calidad visual\",\"Enfoque en la composición y encuadre para resaltar a los jugadores\",\"Lenguaje más descriptivo y específico para generar una escena visual detallada\",\"Optimizado para una duración de 10 segundos\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:04:30.896Z"
+  },
+  {
+    "id": 14,
+    "original_prompt": "ñina nadando\n",
+    "optimized_prompt": "A young girl gracefully swimming underwater in a serene, crystal-clear lake. Slow motion camera follows her fluid movements as she glides through the tranquil, azure waters. Soft, natural lighting filters through the surface, creating a dreamlike, cinematic atmosphere. The camera frames her in a wide, establishing shot to showcase the picturesque setting.",
+    "improvements": "[\"Increased visual clarity and detail\",\"Incorporated fluid, cinematic camera movement\",\"Specified soft, natural lighting for a dreamlike quality\",\"Adapted the prompt to a cinematic style\",\"Optimized for a 10-second video duration\",\"Described a wide, establishing shot for better composition\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:10:17.385Z"
+  },
+  {
+    "id": 15,
+    "original_prompt": "un pinguino volando",
+    "optimized_prompt": "Un elegante pingüino emperador se eleva grácilmente sobre un paisaje helado, su plumaje negro y blanco brillando bajo la tenue luz dorada del atardecer. La cámara sigue su vuelo suave y sinuoso, capturando los movimientos fluidos de sus alas mientras se desliza con elegancia sobre el gélido horizonte.",
+    "improvements": "[\"Describí elementos visuales específicos como el plumaje, la luz y el paisaje helado para mejorar la claridad visual.\",\"Incluí descripciones de movimiento de cámara y acción del pingüino para generar un efecto más cinemático.\",\"Especifiqué la iluminación y atmósfera con la 'tenue luz dorada del atardecer' para crear una estética más cinematográfica.\",\"Adapté el prompt al estilo 'cinematic' solicitado.\",\"Optimicé la duración del video a 10 segundos.\",\"Describí la composición visual con la cámara siguiendo el vuelo del pingüino.\",\"Utilicé términos técnicos como 'grácilmente', 'fluidos', 'sinuoso' y 'desliza' para mejorar la calidad técnica.\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:28:54.623Z"
+  },
+  {
+    "id": 16,
+    "original_prompt": "un pinguino volando\n",
+    "optimized_prompt": "A majestic emperor penguin soars gracefully through the crisp, Antarctic air, its sleek black-and-white form cutting through the icy blue expanse. The camera follows the penguin's effortless flight, capturing its powerful wing strokes and the serene, cinematic atmosphere. Soft, natural lighting illuminates the scene, creating a sense of awe and wonder. This 10-second cinematic sequence showcases the penguin's unexpected aerial prowess and the captivating beauty of the frozen landscape.",
+    "improvements": "[\"Described the penguin in more detail (emperor penguin, sleek black-and-white form)\",\"Added a sense of movement and camera work (camera follows the penguin's flight, capturing its wing strokes)\",\"Specified the lighting as soft and natural, creating a cinematic atmosphere\",\"Optimized the prompt for a 10-second duration\",\"Focused on the cinematic style and composition of the shot\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:35:36.857Z"
+  },
+  {
+    "id": 17,
+    "original_prompt": "un pinguino volando",
+    "optimized_prompt": "Majestuoso pingüino sobrevolando un paisaje invernal. Planos amplios que capturan su elegante vuelo sobre un fondo de montañas nevadas y cielo nublado. Cámara lenta que acentúa la gracia de sus movimientos. Iluminación natural y suave, con destellos de luz que resaltan su plumaje negro y blanco. Composición visual equilibrada y armoniosa. Video de alta calidad técnica, con nitidez y detalles definidos.",
+    "improvements": "[\"Claridad visual: Descripción detallada de elementos visuales como el paisaje, el vuelo del pingüino y su plumaje.\",\"Movimiento: Inclusión de cámara lenta para resaltar la elegancia del vuelo.\",\"Iluminación: Especificación de una iluminación natural y suave, con destellos de luz.\",\"Estilo: Adaptación del prompt al estilo cinematic solicitado.\",\"Duración: Optimización para un video de 10 segundos.\",\"Composición: Descripción de una composición visual equilibrada y armoniosa.\",\"Calidad técnica: Inclusión de términos que mejoran la calidad técnica del video.\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:48:01.508Z"
+  },
+  {
+    "id": 18,
+    "original_prompt": "un pinguino volando",
+    "optimized_prompt": "Un elegante pingüino negro y blanco planea suavemente a través de un cielo azul claro, con delicados movimientos de sus alas. La cámara sigue al pingüino en un plano medio, capturando su gracia y elegancia en un estilo cinemático. La iluminación es suave y natural, creando una atmósfera tranquila y serena. El video tiene una duración de 10 segundos y una composición visual equilibrada y estética.",
+    "improvements": "[\"Claridad visual: Describo detalles específicos del pingüino y el entorno\",\"Movimiento: Incluyo descripciones del movimiento del pingüino y de la cámara\",\"Iluminación: Especifico el tipo de iluminación y atmósfera\",\"Estilo: Adapto el prompt a un estilo cinemático\",\"Duración: Optimizo para un video de 10 segundos\",\"Composición: Describo la composición visual del encuadre\",\"Calidad técnica: Utilizo términos que sugieren una alta calidad técnica\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:52:14.881Z"
+  },
+  {
+    "id": 19,
+    "original_prompt": "paloma\n",
+    "optimized_prompt": "A lone white dove gracefully glides through the serene, golden-hued sky. Its delicate wings flutter gently, creating a mesmerizing, cinematic movement. The soft, warm lighting bathes the dove in a heavenly glow, accentuating its pure, ethereal beauty. The camera follows the dove's peaceful flight, capturing its elegant silhouette against the tranquil, atmospheric backdrop. This 10-second cinematic sequence showcases the dove's tranquil, meditative presence in a visually captivating manner.",
+    "improvements": "[\"Added specific visual details about the dove's appearance and movement\",\"Described the cinematic camera movement and framing\",\"Specified the warm, atmospheric lighting to create a serene, heavenly mood\",\"Adapted the prompt to a 10-second cinematic sequence\",\"Included technical terms to enhance the visual quality and cinematic style\"]",
+    "confidence_score": 0.9,
+    "target_style": "cinematic",
+    "duration": 10,
+    "created_at": "2025-08-16T02:54:05.868Z"
   }
 ]

@@ -9,6 +9,7 @@ interface PromptData {
   aspectRatio: string;
   style: string;
   duration: number;
+  provider: string;
 }
 
 const Editor: React.FC = () => {
@@ -17,7 +18,8 @@ const Editor: React.FC = () => {
     originalPrompt: '',
     aspectRatio: '16:9',
     style: 'realistic',
-    duration: 10
+    duration: 10,
+    provider: 'veo3'
   });
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -41,6 +43,11 @@ const Editor: React.FC = () => {
     { value: 10, label: '10 segundos' },
     { value: 15, label: '15 segundos' },
     { value: 30, label: '30 segundos' }
+  ];
+
+  const providers = [
+    { value: 'veo3', label: 'Google Veo 3' },
+    { value: 'sora', label: 'OpenAI Sora' }
   ];
 
   const handleOptimizePrompt = async () => {
@@ -92,7 +99,8 @@ const Editor: React.FC = () => {
 
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/videos/generate', {
+      const endpoint = promptData.provider === 'sora' ? '/api/videos/generate-sora' : '/api/videos/generate';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -102,6 +110,7 @@ const Editor: React.FC = () => {
           aspectRatio: promptData.aspectRatio,
           style: promptData.style,
           duration: promptData.duration,
+          resolution: '720',
           originalPrompt: promptData.originalPrompt,
           optimizedPrompt: promptData.optimizedPrompt
         })
@@ -238,6 +247,24 @@ const Editor: React.FC = () => {
                   {durations.map(duration => (
                     <option key={duration.value} value={duration.value}>
                       {duration.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Provider */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Proveedor de IA
+                </label>
+                <select
+                  value={promptData.provider}
+                  onChange={(e) => setPromptData(prev => ({ ...prev, provider: e.target.value }))}
+                  className="input-field"
+                >
+                  {providers.map(provider => (
+                    <option key={provider.value} value={provider.value}>
+                      {provider.label}
                     </option>
                   ))}
                 </select>

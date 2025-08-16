@@ -1,23 +1,23 @@
-import fs from 'fs';
-import path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { GoogleGenAI } from '@google/genai';
+import fs from "fs";
+import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { GoogleGenAI } from "@google/genai";
 
-// Generador de ID simple ya que uuid no está disponible
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
+// Usar dotenv para cargar los environment variables
+import dotenv from "dotenv";
+dotenv.config();
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
 const execAsync = promisify(exec);
 
 // Interfaces basadas en la documentación oficial de Google Veo 3
 export interface GenerateVideoRequest {
   prompt: string;
-  aspectRatio?: '16:9' | '9:16' | '1:1';
+  aspectRatio?: "16:9" | "9:16" | "1:1";
   durationSeconds?: number;
   duration?: number;
-  resolution?: '720' | '1080' | '4k';
+  resolution?: "720" | "1080" | "4k";
   generateAudio?: boolean;
   enhancePrompt?: boolean;
   negativePrompt?: string;
@@ -33,7 +33,7 @@ export interface GenerateVideoRequest {
 
 export interface VideoJob {
   id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: "queued" | "processing" | "completed" | "failed";
   prompt: string;
   operationName?: string; // Para tracking de la operación en Google
   videoUrl?: string;
@@ -70,25 +70,22 @@ interface GoogleVeoOperation {
 // Almacén en memoria para los trabajos (en producción usar una base de datos)
 const videoJobs = new Map<string, VideoJob>();
 
-// Configuración de la API de Google Vertex AI para Veo 3
-const VEO_MODEL = 'veo-2.0-generate-001'; // Modelo actual de Veo disponible
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'kidsfin-mini-juegos';
-const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+// Configuración de la API de Google Gemini para Veo 3
+const VEO_MODEL = "veo-3.0-generate-preview"; // Modelo Veo 3 según ejemplo proporcionado
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || "kidsfin-mini-juegos";
+const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
 
 let genAI: GoogleGenAI | null = null;
 
 function getGenAI(): GoogleGenAI | null {
-  if (!process.env.GOOGLE_API_KEY) return null;
+  if (!GOOGLE_API_KEY) return null;
   if (!genAI) {
     try {
       genAI = new GoogleGenAI({
-        vertexai: true,
-        project: PROJECT_ID,
-        location: LOCATION,
-        apiKey: process.env.GOOGLE_API_KEY,
+        apiKey: GOOGLE_API_KEY,
       });
     } catch (e) {
-      console.error('Error inicializando Google Gen AI:', e);
+      console.error("Error inicializando Google Gen AI:", e);
       return null;
     }
   }
@@ -101,113 +98,116 @@ function generateJobId(): string {
 }
 
 // Función principal para iniciar la generación de video
-export async function generateVideo(request: GenerateVideoRequest): Promise<GenerateVideoResponse> {
+export async function generateVideo(
+  request: GenerateVideoRequest
+): Promise<GenerateVideoResponse> {
   const jobId = generateJobId();
-  
+
   const job: VideoJob = {
     id: jobId,
-    status: 'queued',
+    status: "queued",
     prompt: request.prompt,
     createdAt: new Date(),
     progress: 0,
     duration: request.durationSeconds || 5,
-    aspectRatio: request.aspectRatio || '16:9',
-    style: request.style
+    aspectRatio: request.aspectRatio || "16:9",
+    style: request.style,
   };
-  
+
   videoJobs.set(jobId, job);
-  
+
   // Procesar el video de forma asíncrona
-  processVideoGeneration(jobId, request).catch(error => {
+  processVideoGeneration(jobId, request).catch((error) => {
     console.error(`Error processing video ${jobId}:`, error);
     const failedJob = videoJobs.get(jobId);
     if (failedJob) {
-      failedJob.status = 'failed';
+      failedJob.status = "failed";
       failedJob.error = error.message;
     }
   });
-  
+
   return {
     jobId,
-    status: 'queued',
-    estimatedTime: (request.durationSeconds || 5) * 30 // Estimación: 30 segundos por segundo de video
+    status: "queued",
+    estimatedTime: (request.durationSeconds || 5) * 30, // Estimación: 30 segundos por segundo de video
   };
 }
 
 // Función para procesar la generación de video usando la API real de Veo 3
-async function processVideoGeneration(jobId: string, request: GenerateVideoRequest): Promise<void> {
+async function processVideoGeneration(
+  jobId: string,
+  request: GenerateVideoRequest
+): Promise<void> {
   const job = videoJobs.get(jobId);
   if (!job) return;
-  
+
   try {
-    job.status = 'processing';
+    job.status = "processing";
     job.progress = 10;
-    
+
     // Preparar la solicitud para la API de Veo 3
     const veoRequest = {
-      contents: [{
-        parts: [{
-          text: request.prompt
-        }]
-      }],
-      generationConfig: {
-        aspectRatio: request.aspectRatio || '16:9',
-        durationSeconds: request.durationSeconds || 5,
-        resolution: mapResolution(request.resolution || 'HD'),
-        generateAudio: request.generateAudio || false
-      }
+      prompt: request.prompt,
+      aspectRatio: request.aspectRatio || "16:9",
+      durationSeconds: request.durationSeconds || 5,
+      generateAudio: request.generateAudio || false,
     };
-    
+
     job.progress = 20;
-    
+
     // Intentar usar la API real de Veo 3, con fallback a simulación
-    let operation: { name: string };
+    let operation: any; // Acepta el objeto de operación completo
     try {
       operation = await startVideoGeneration(veoRequest);
       job.operationName = operation.name;
       job.progress = 30;
-      
+
       // Polling del estado de la operación
-      const completedOperation = await pollOperationStatus(operation.name, jobId);
-      
+      const completedOperation = await pollOperationStatus(operation, jobId);
+      console.log("completedOperation", completedOperation);
+
       if (completedOperation.error) {
         throw new Error(completedOperation.error.message);
       }
-      
-      if (completedOperation.response?.generatedVideo?.uri) {
+
+      if (completedOperation.response?.generatedVideo) {
         job.progress = 80;
-        
-        // Descargar y guardar el video desde Google Cloud Storage
+
+        // Descargar y guardar el video
         const { videoPath, thumbnailPath } = await downloadAndSaveVideo(
-          completedOperation.response.generatedVideo.uri, 
+          completedOperation.response?.generatedVideo,
           jobId
         );
-        
-        job.status = 'completed';
+
+        job.status = "completed";
         job.videoUrl = `/uploads/videos/${path.basename(videoPath)}`;
-        job.thumbnailUrl = `/uploads/thumbnails/${path.basename(thumbnailPath)}`;
+        job.thumbnailUrl = `/uploads/thumbnails/${path.basename(
+          thumbnailPath
+        )}`;
         job.completedAt = new Date();
         job.progress = 100;
       } else {
-        throw new Error('No se pudo obtener la URL del video generado');
+        throw new Error("No se pudo obtener la URL del video generado");
       }
     } catch (apiError) {
-      console.warn('API de Veo 3 no disponible, usando simulación:', apiError);
-      
+      console.warn("API de Veo 3 no disponible, usando simulación:", apiError);
+
       // Fallback: usar simulación local
       job.progress = 50;
-      const { videoPath, thumbnailPath } = await generateTestVideo(jobId, request);
-      
-      job.status = 'completed';
+      const { videoPath, thumbnailPath } = await generateTestVideo(
+        jobId,
+        request
+      );
+
+      job.status = "completed";
       job.videoUrl = `/uploads/videos/${path.basename(videoPath)}`;
       job.thumbnailUrl = `/uploads/thumbnails/${path.basename(thumbnailPath)}`;
       job.completedAt = new Date();
       job.progress = 100;
     }
-    
   } catch (error) {
-    job.status = 'failed';
-    job.error = error instanceof Error ? error.message : 'Error desconocido';
+    job.status = "failed";
+    job.error = error instanceof Error ? error.message : "Error desconocido";
     job.progress = 0;
   }
 }
@@ -215,180 +215,214 @@ async function processVideoGeneration(jobId: string, request: GenerateVideoReque
 // Función para mapear la resolución al formato esperado por la API
 function mapResolution(resolution: string): string {
   const resolutionMap: { [key: string]: string } = {
-    '720': '720',
-    '1080': '1080'
+    "720": "720",
+    "1080": "1080",
   };
-  return resolutionMap[resolution] || '720';
+  return resolutionMap[resolution] || "720";
 }
 
 // Función para iniciar la generación de video con Google Gen AI SDK
-async function startVideoGeneration(request: { contents: { parts: { text: string }[] }[], generationConfig: any }): Promise<{ name: string }> {
+async function startVideoGeneration(request: {
+  prompt: string;
+  aspectRatio?: string;
+  durationSeconds?: number;
+  generateAudio?: boolean;
+}): Promise<any> {
   const genAI = getGenAI();
   if (!genAI) {
-    throw new Error('Google Gen AI no configurada');
+    throw new Error("Google Gen AI no configurada");
   }
-  
-  try {
-    const prompt = request.contents[0]?.parts[0]?.text || '';
-    
-    const config = {
-      numberOfVideos: 1,
-      aspectRatio: request.generationConfig.aspectRatio || '16:9',
-      durationSeconds: request.generationConfig.durationSeconds || 5,
-      generateAudio: request.generationConfig.generateAudio || false,
-      enhancePrompt: true,
-      personGeneration: 'allow_all',
-    };
 
-    const operation = await genAI.models.generateVideos({
+  try {
+    const response = await genAI.models.generateVideos({
       model: VEO_MODEL,
-      prompt: prompt,
-      config: config
+      prompt: request.prompt,
+      config: {
+        numberOfVideos: 1,
+        aspectRatio: request.aspectRatio || "16:9",
+        // durationSeconds: request.durationSeconds || 5, // Eliminado por no ser soportado
+        // Nota: generateAudio no está disponible en la configuración actual
+      },
     });
 
-    return { name: operation.name || `operation-${Date.now()}` };
+    return response;
   } catch (error) {
-    console.error('Error starting video generation:', error);
+    console.error("Error starting video generation:", error);
     throw error;
   }
 }
 
 // Función para hacer polling del estado de la operación con Google Gen AI SDK
-async function pollOperationStatus(operationName: string, jobId: string): Promise<GoogleVeoOperation> {
+async function pollOperationStatus(
+  operation: any, // Acepta el objeto de operación completo
+  jobId: string
+): Promise<GoogleVeoOperation> {
   const genAI = getGenAI();
   if (!genAI) {
-    throw new Error('Google Gen AI no configurada');
+    throw new Error("Google Gen AI no configurada");
   }
 
-  const maxAttempts = 120; // 10 minutos máximo (5 segundos * 120)
+  const maxAttempts = 120; // 10 minutos máximo
   let attempts = 0;
-  
+
   while (attempts < maxAttempts) {
     try {
-      const operation = await genAI.operations.get({
-        name: operationName
-      });
-      
+      const operationResult = await genAI.operations.get(operation);
+
       // Actualizar progreso del job
       const job = videoJobs.get(jobId);
       if (job) {
         job.progress = Math.min(30 + (attempts / maxAttempts) * 50, 80);
       }
-      
-      if (operation.done) {
+
+      if (operationResult.done) {
         return {
-          name: operation.name,
-          done: operation.done,
-          response: operation.response ? {
-            generatedVideo: operation.response.generatedVideos?.[0]?.video?.uri
-          } : undefined,
-          error: operation.error
+          name: operationResult.name || operation.name,
+          done: operationResult.done,
+          response: operationResult.response
+            ? {
+                generatedVideo:
+                  (operationResult.response as any).generatedVideos?.[0]?.video,
+              }
+            : undefined,
+          error: operationResult.error
+            ? { message: (operationResult.error as any).message }
+            : undefined,
         };
       }
-      
-      // Esperar 5 segundos antes del siguiente intento
-      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Esperar 10 segundos antes del siguiente intento
+      await new Promise((resolve) => setTimeout(resolve, 10000));
       attempts++;
-      
     } catch (error) {
-      console.error('Error polling operation status:', error);
+      console.error("Error polling operation status:", error);
       attempts++;
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 10000));
     }
   }
-  
-  throw new Error('Timeout: La generación de video tardó demasiado tiempo');
+
+  throw new Error("Timeout: La generación de video tardó demasiado tiempo");
 }
 
-// Función para descargar y guardar el video desde Google Cloud Storage
-async function downloadAndSaveVideo(videoUri: string, jobId: string): Promise<{ videoPath: string; thumbnailPath: string }> {
-  const uploadsDir = path.join(process.cwd(), 'uploads');
-  const videosDir = path.join(uploadsDir, 'videos');
-  const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
-  
+// Función para descargar y guardar el video
+async function downloadAndSaveVideo(
+  videoFile: any,
+  jobId: string
+): Promise<{ videoPath: string; thumbnailPath: string }> {
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  const videosDir = path.join(uploadsDir, "videos");
+  const thumbnailsDir = path.join(uploadsDir, "thumbnails");
+
   // Crear directorios si no existen
-  [uploadsDir, videosDir, thumbnailsDir].forEach(dir => {
+  [uploadsDir, videosDir, thumbnailsDir].forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
   });
-  
+
   const videoPath = path.join(videosDir, `${jobId}.mp4`);
   const thumbnailPath = path.join(thumbnailsDir, `${jobId}.jpg`);
-  
+
   try {
-    // Descargar el video desde Google Cloud Storage
-    const apiKey = process.env.GOOGLE_API_KEY;
-    const downloadUrl = `${videoUri}?key=${apiKey}`;
-    
-    await execAsync(`curl -H "Authorization: Bearer ${apiKey}" -o "${videoPath}" "${downloadUrl}"`);
-    
-    // Verificar que el archivo se descargó correctamente
-    if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size === 0) {
-      throw new Error('El video descargado está vacío o no existe');
+    // Obtener el video usando la API de Google Gen AI
+    const genAI = getGenAI();
+    if (!genAI) {
+      throw new Error("Google Gen AI no configurada");
     }
-    
+
+    // Descargar el video usando curl con la URI proporcionada
+    if (videoFile?.uri) {
+      const curlCommand = `curl -L "${videoFile.uri}" -o "${videoPath}"`;
+      await execAsync(curlCommand);
+    } else if (videoFile?.name) {
+      // Si tenemos el nombre del archivo, intentar obtener la URI
+      const fileResponse = await genAI.files.get({
+        name: videoFile.name,
+      });
+
+      if (fileResponse?.uri) {
+        const curlCommand = `curl -L "${fileResponse.uri}" -o "${videoPath}"`;
+        await execAsync(curlCommand);
+      } else {
+        throw new Error("No se pudo obtener la URI del video");
+      }
+    } else {
+      throw new Error("Información de video insuficiente para descargar");
+    }
+
     // Generar thumbnail usando ffmpeg
     await generateThumbnail(videoPath, thumbnailPath);
-    
+
     return { videoPath, thumbnailPath };
   } catch (error) {
-    console.error('Error downloading video:', error);
-    throw new Error('Failed to download video from Google Cloud Storage');
+    console.error("Error downloading video:", error);
+    throw new Error("Failed to download video from Google Cloud Storage");
   }
 }
 
 // Función para generar video de prueba (fallback)
-async function generateTestVideo(jobId: string, request: GenerateVideoRequest): Promise<{ videoPath: string; thumbnailPath: string }> {
-  const uploadsDir = path.join(process.cwd(), 'uploads');
-  const videosDir = path.join(uploadsDir, 'videos');
-  const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
-  
+async function generateTestVideo(
+  jobId: string,
+  request: GenerateVideoRequest
+): Promise<{ videoPath: string; thumbnailPath: string }> {
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  const videosDir = path.join(uploadsDir, "videos");
+  const thumbnailsDir = path.join(uploadsDir, "thumbnails");
+
   // Crear directorios si no existen
-  [uploadsDir, videosDir, thumbnailsDir].forEach(dir => {
+  [uploadsDir, videosDir, thumbnailsDir].forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
   });
-  
+
   const videoPath = path.join(videosDir, `${jobId}.mp4`);
   const thumbnailPath = path.join(thumbnailsDir, `${jobId}.jpg`);
-  
+
   try {
     const duration = request.durationSeconds || 5;
-    const aspectRatio = request.aspectRatio || '16:9';
-    
+    const aspectRatio = request.aspectRatio || "16:9";
+
     // Determinar resolución basada en aspect ratio
-    let resolution = '1280x720'; // 16:9 por defecto
-    if (aspectRatio === '9:16') {
-      resolution = '720x1280';
-    } else if (aspectRatio === '1:1') {
-      resolution = '720x720';
+    let resolution = "1280x720"; // 16:9 por defecto
+    if (aspectRatio === "9:16") {
+      resolution = "720x1280";
+    } else if (aspectRatio === "1:1") {
+      resolution = "720x720";
     }
-    
+
     // Generar video con patrón de test usando ffmpeg
     const ffmpegCommand = `ffmpeg -f lavfi -i testsrc=duration=${duration}:size=${resolution}:rate=25 -c:v libx264 -pix_fmt yuv420p -t ${duration} "${videoPath}" -y`;
-    
+
     await execAsync(ffmpegCommand);
-    
+
     // Generar thumbnail
     await generateThumbnail(videoPath, thumbnailPath);
-    
+
     return { videoPath, thumbnailPath };
   } catch (error) {
-    console.error('Error generating test video:', error);
-    throw new Error('Failed to generate test video');
+    console.error("Error generating test video:", error);
+    throw new Error("Failed to generate test video");
   }
 }
 
 // Función para generar thumbnail
-async function generateThumbnail(videoPath: string, thumbnailPath: string): Promise<void> {
+async function generateThumbnail(
+  videoPath: string,
+  thumbnailPath: string
+): Promise<void> {
   try {
-    await execAsync(`ffmpeg -i "${videoPath}" -ss 00:00:01 -vframes 1 -y "${thumbnailPath}"`);
+    await execAsync(
+      `ffmpeg -i "${videoPath}" -ss 00:00:01 -vframes 1 -y "${thumbnailPath}"`
+    );
   } catch (error) {
-    console.error('Error generating thumbnail:', error);
+    console.error("Error generating thumbnail:", error);
     // Si falla la generación del thumbnail, crear uno por defecto
-    const defaultThumbnail = path.join(process.cwd(), 'public', 'default-thumbnail.jpg');
+    const defaultThumbnail = path.join(
+      process.cwd(),
+      "public",
+      "default-thumbnail.jpg"
+    );
     if (fs.existsSync(defaultThumbnail)) {
       fs.copyFileSync(defaultThumbnail, thumbnailPath);
     }
@@ -409,28 +443,38 @@ export function getAllVideoJobs(): VideoJob[] {
 export function cleanupOldJobs(maxAgeHours: number = 24): number {
   const cutoffTime = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
   let deletedCount = 0;
-  
+
   for (const [jobId, job] of videoJobs.entries()) {
     if (job.createdAt < cutoffTime) {
       // Eliminar archivos asociados
       if (job.videoUrl) {
-        const videoPath = path.join(process.cwd(), 'uploads', 'videos', path.basename(job.videoUrl));
+        const videoPath = path.join(
+          process.cwd(),
+          "uploads",
+          "videos",
+          path.basename(job.videoUrl)
+        );
         if (fs.existsSync(videoPath)) {
           fs.unlinkSync(videoPath);
         }
       }
       if (job.thumbnailUrl) {
-        const thumbnailPath = path.join(process.cwd(), 'uploads', 'thumbnails', path.basename(job.thumbnailUrl));
+        const thumbnailPath = path.join(
+          process.cwd(),
+          "uploads",
+          "thumbnails",
+          path.basename(job.thumbnailUrl)
+        );
         if (fs.existsSync(thumbnailPath)) {
           fs.unlinkSync(thumbnailPath);
         }
       }
-      
+
       videoJobs.delete(jobId);
       deletedCount++;
     }
   }
-  
+
   return deletedCount;
 }
 
@@ -446,18 +490,18 @@ export async function testGoogleAIConnection(): Promise<boolean> {
     if (!genAI) {
       return false;
     }
-    
+
     // Intentar verificar si el modelo Veo está disponible
     try {
       const model = await genAI.models.get({
-        model: VEO_MODEL
+        model: VEO_MODEL,
       });
       return !!model;
     } catch (error) {
       return false;
     }
   } catch (error) {
-    console.error('Error testing Google AI connection:', error);
+    console.error("Error testing Google AI connection:", error);
     return false;
   }
 }
